@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Draughts</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#1a1a2e;color:#eee;font-family:system-ui;display:flex;flex-direction:column;align-items:center;padding:5px}
+h1{font-size:1.75rem;line-height:1.05;margin:2px 0 4px;letter-spacing:3px}
+#status{position:fixed;z-index:120;top:6px;left:50%;transform:translate(-50%,-12px);width:min(92vw,480px);padding:8px 10px;background:#16213e;border:1px solid #334155;border-radius:9px;text-align:center;line-height:1.25;font-size:.82rem;box-shadow:0 4px 18px #0008;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s,transform .18s,visibility .18s}
+#status.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+.setupControls{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,.72fr);gap:5px;width:96vw;max-width:520px;margin:3px 0}
+.setupControls select:last-child{grid-column:1/-1}
+select{width:100%;height:34px;padding:5px 27px 5px 9px;border:1px solid #355071;border-radius:8px;background:#0f3460;color:#fff;font:600 .8rem system-ui;cursor:pointer}
+select:disabled{opacity:.45;cursor:not-allowed}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin:3px 0;width:96vw;max-width:520px}
+button{min-height:32px;background:#0f3460;color:#fff;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.78rem}
+button.sel{background:#eab308;color:#000;font-weight:800}
+button.big{font-weight:800}
+button.infoBtn{background:#334155}
+button:disabled{opacity:.55;cursor:wait}
+input{height:32px;padding:5px 7px;border-radius:8px;border:1px solid #444;background:#0f0f23;color:#fff;width:84px;text-align:center;text-transform:uppercase;font-size:.78rem;font-weight:700}
+#boardWrap{position:relative;width:96vw;max-width:520px;aspect-ratio:1/1}
+#board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;height:100%;background:#3a3a5c;border:4px solid #3a3a5c;border-radius:6px;overflow:hidden;touch-action:manipulation}
+.square{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1;cursor:pointer;user-select:none;-webkit-user-select:none}
+.square.light{background:#e8dcc0}
+.square.dark{background:#8d6a43}
+.square.selected{background:#6ec6ff!important}
+.square.last{box-shadow:inset 0 0 0 4px #facc15aa}
+.square.trail{box-shadow:inset 0 0 0 3px #facc1588}
+.square.hint::after{content:'';position:absolute;width:20%;height:20%;border-radius:50%;background:#65a30d;opacity:.85}
+.square.captureHint::after{content:'';position:absolute;inset:8%;border:4px solid #65a30d;border-radius:50%;opacity:.9}
+.piece{position:relative;z-index:2;width:76%;height:76%;border-radius:50%;box-shadow:inset 0 3px 3px #fff2,inset 0 -4px 5px #0006,0 2px 3px #0008;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.piece.black{background:radial-gradient(circle at 38% 30%,#493223 0,#25170f 55%,#120b07 100%);border:2px solid #090604}
+.piece.white{background:radial-gradient(circle at 38% 30%,#fffef8 0,#e8e3d7 58%,#b8b0a2 100%);border:2px solid #8d887e}
+.piece.king{box-shadow:inset 0 0 0 4px #d8a928,inset 0 3px 3px #fff3,inset 0 -4px 5px #0005,0 2px 3px #0008}
+.piece.king::after{content:'♛';font-family:'Segoe UI Symbol','Arial Unicode MS',serif;font-size:clamp(1.25rem,7vw,2.75rem);line-height:1;color:#eab308;text-shadow:0 1px 1px #000}
+.piece.white.king::after{color:#8a5c00;text-shadow:0 1px 0 #fff}
+.coord{position:absolute;z-index:3;font-size:clamp(.48rem,1.8vw,.66rem);font-weight:800;opacity:.7;pointer-events:none}
+.coord.file{right:3px;bottom:1px}.coord.rank{left:3px;top:1px}
+.square.light .coord{color:#704b2d}.square.dark .coord{color:#f0dfbd}
+#endBanner{position:absolute;z-index:20;left:6%;right:6%;top:50%;transform:translateY(-50%);display:none;padding:16px 10px;border:2px solid #facc15;border-radius:12px;background:rgba(15,23,42,.72);box-shadow:0 6px 28px #0009;text-align:center;pointer-events:none;backdrop-filter:blur(1px)}
+#endBanner.show{display:block}
+#endTitle{font-size:clamp(1.75rem,9vw,3.1rem);font-weight:900;letter-spacing:2px;color:#facc15;text-shadow:0 2px 3px #000}
+#endReason{margin-top:4px;font-size:clamp(.8rem,3.5vw,1rem);font-weight:700;color:#fff}
+#info{font-size:.8rem;margin:5px 5px 2px;text-align:center;line-height:1.35}
+#rulesModal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:110;padding:12px}
+#rulesBox{background:#f8f1e0;color:#1a1a1a;border-radius:14px;max-width:520px;width:96vw;max-height:90vh;overflow:auto;padding:18px 16px;line-height:1.45}
+#rulesBox h2{margin-top:0}#rulesBox h3{margin:14px 0 6px}
+#closeRules{margin-top:12px;width:100%;background:#0f3460;color:#fff;padding:10px;border-radius:9px;border:none;font-weight:700}
+@media(min-width:440px){.setupControls{grid-template-columns:1fr .72fr 1.55fr}.setupControls select:last-child{grid-column:auto}}
+</style>
+</head>
+<body>
+
+<h1>DRAUGHTS</h1>
+<div id="status" role="status" aria-live="polite"></div>
+
+<div class="setupControls">
+<select id="opponentSelect" aria-label="Choose opponent"><option value="human" selected>Versus Human</option><option value="cassie">Versus Cassie</option><option value="free">Free Play (same phone)</option></select>
+<select id="difficultySelect" aria-label="Choose Cassie difficulty" disabled><option value="" selected disabled hidden>Difficulty</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>
+<select id="sideSelect" aria-label="Choose your colour against Cassie" disabled><option value="" selected disabled hidden>Choose colour</option><option value="b">Play Black against Cassie</option><option value="w">Play White against Cassie</option></select>
+</div>
+
+<div class="controls"><button id="createBtn" class="big">Create Game</button><input id="codeInput" placeholder="GAME CODE" maxlength="4" aria-label="Four-character game code"><button id="joinBtn" class="big">Join Game</button><button id="copyBtn" hidden>Copy</button><button id="resetBtn">Reset</button><button id="howBtn" class="infoBtn">? How to Play</button></div>
+
+<div id="boardWrap"><div id="board" role="grid" aria-label="Draughts board"></div><div id="endBanner" role="status" aria-live="polite"><div id="endTitle"></div><div id="endReason"></div></div></div>
+<div id="info">You: <b><span id="myRole">-</span></b> | Turn: <b><span id="turnInfo">Black</span></b> | <span id="modeInfo">Human</span><br><span id="pieceInfo">Black 12 · White 12</span><br><span id="conn" style="color:#22c55e">Offline</span><br><span id="thinkInfo" style="color:#facc15"></span></div>
+
+<div id="rulesModal"><div id="rulesBox">
+<h2>Draughts (Checkers)</h2>
+<p>This is <b>English draughts</b>, called <b>checkers</b> or <b>American checkers</b> in the United States. Each player starts with 12 pieces, and Black moves first.</p>
+
+<h3>Goal</h3>
+<p>Win by capturing all the opposing pieces, or by leaving your opponent with no legal move.</p>
+
+<h3>Ordinary pieces</h3>
+<p>Pieces move only on the dark squares. An ordinary piece, or <b>man</b>, moves one square diagonally forwards into an empty square. Black moves towards White's starting side; White moves towards Black's.</p>
+
+<h3>Captures</h3>
+<p>Jump diagonally forwards over an adjacent opposing piece into the empty square immediately beyond it. The jumped piece is captured. <b>If any capture is available, you must take one.</b></p>
+<p>If the same piece can jump again, it must continue in the same turn. When there is a choice of capture routes, you may choose any complete route; it need not capture the greatest number of pieces. Green rings show the next possible landing squares.</p>
+
+<h3>Kings</h3>
+<p>A man reaching the farthest row is crowned as a <b>king</b>. Its turn ends when it is crowned. From its next turn, a king may move or capture one square or one jump diagonally forwards or backwards.</p>
+
+<h3>Playing here</h3>
+<p>In an online human game, the creator plays Black and shares the four-character code; the player who joins is White. Choose <b>Free Play</b> for two people sharing one phone, or to explore both sides yourself. Against Cassie, choose Easy, Medium or Hard and then choose your colour. Reset leaves the current game and restores all settings.</p>
+<p>This version declares a draw after the same position occurs three times, or after 80 turns without a capture or a crowning.</p>
+
+<h3>Tips</h3>
+<p>Keep pieces connected so they protect one another, be wary of compulsory captures that lead into traps, and do not hurry to empty your back row: it helps prevent an early enemy king.</p>
+
+<button id="closeRules">Close</button>
+</div></div>
+
+<script>
+'use strict';
+
+const SIZE=8,EMPTY=0,BLACK_MAN=1,BLACK_KING=2,WHITE_MAN=-1,WHITE_KING=-2,MATE=100000;
+const FILES='abcdefgh';
+
+function rowOf(square){return Math.floor(square/SIZE);}
+function colOf(square){return square%SIZE;}
+function squareOf(row,col){return row*SIZE+col;}
+function onBoard(row,col){return row>=0&&row<SIZE&&col>=0&&col<SIZE;}
+function otherColor(color){return color==='b'?'w':'b';}
+function pieceColor(piece){return piece>0?'b':piece<0?'w':null;}
+function isKing(piece){return Math.abs(piece)===2;}
+function isCrownRow(color,row){return color==='b'?row===0:row===7;}
+function moveDirs(piece){if(isKing(piece))return[[-1,-1],[-1,1],[1,-1],[1,1]];return piece>0?[[-1,-1],[-1,1]]:[[1,-1],[1,1]];}
+function cloneBoard(board){return board.slice();}
+function squareName(square){return FILES[colOf(square)]+(8-rowOf(square));}
+function colorName(color){return color==='b'?'Black':'White';}
+
+function captureMovesFrom(board,from){
+const piece=board[from],color=pieceColor(piece),results=[];
+if(!piece)return results;
+function walk(currentBoard,current,path,captures){
+let found=false,row=rowOf(current),col=colOf(current);
+for(let [dr,dc] of moveDirs(piece)){
+let middleRow=row+dr,middleCol=col+dc,landingRow=row+dr*2,landingCol=col+dc*2;
+if(!onBoard(landingRow,landingCol))continue;
+let middle=squareOf(middleRow,middleCol),landing=squareOf(landingRow,landingCol),victim=currentBoard[middle];
+if(!victim||pieceColor(victim)===color||currentBoard[landing]!==EMPTY)continue;
+found=true;let next=cloneBoard(currentBoard);next[current]=EMPTY;next[middle]=EMPTY;next[landing]=piece;
+let nextPath=path.concat(landing),nextCaptures=captures.concat(middle);
+if(!isKing(piece)&&isCrownRow(color,landingRow))results.push({from,to:landing,path:nextPath,captures:nextCaptures,promotes:true});
+else walk(next,landing,nextPath,nextCaptures);
+}
+if(!found&&captures.length)results.push({from,to:current,path:path.slice(),captures:captures.slice(),promotes:!isKing(piece)&&isCrownRow(color,rowOf(current))});
+}
+walk(board,from,[],[]);return results;
+}
+
+function simpleMovesFrom(board,from){
+const piece=board[from],moves=[];if(!piece)return moves;let row=rowOf(from),col=colOf(from),color=pieceColor(piece);
+for(let [dr,dc] of moveDirs(piece)){let nr=row+dr,nc=col+dc;if(!onBoard(nr,nc))continue;let to=squareOf(nr,nc);if(board[to]===EMPTY)moves.push({from,to,path:[to],captures:[],promotes:!isKing(piece)&&isCrownRow(color,nr)});}
+return moves;
+}
+
+function generateMoves(board,color){
+let captures=[];
+for(let square=0;square<64;square++)if(pieceColor(board[square])===color)captures.push(...captureMovesFrom(board,square));
+if(captures.length)return captures;
+let moves=[];for(let square=0;square<64;square++)if(pieceColor(board[square])===color)moves.push(...simpleMovesFrom(board,square));
+return moves;
+}
+
+function applyMoveToBoard(board,move){
+let next=cloneBoard(board),piece=next[move.from],current=move.from;next[current]=EMPTY;
+for(let landing of move.path){if(Math.abs(rowOf(landing)-rowOf(current))===2){let middle=squareOf((rowOf(landing)+rowOf(current))/2,(colOf(landing)+colOf(current))/2);next[middle]=EMPTY;}current=landing;}
+if(!isKing(piece)&&isCrownRow(pieceColor(piece),rowOf(current)))piece=piece>0?BLACK_KING:WHITE_KING;
+next[current]=piece;return next;
+}
+
+function applyPartialMove(board,from,path){
+let next=cloneBoard(board),piece=next[from],current=from;next[current]=EMPTY;
+for(let index=0;index<path.length;index++){let landing=path[index];if(Math.abs(rowOf(landing)-rowOf(current))===2){let middle=squareOf((rowOf(landing)+rowOf(current))/2,(colOf(landing)+colOf(current))/2);next[middle]=EMPTY;}current=landing;next[current]=piece;if(index<path.length-1)next[current]=EMPTY;}
+return next;
+}
+
+function positionKey(state){return state.turn+'|'+state.board.map(piece=>piece===WHITE_KING?'a':piece===WHITE_MAN?'b':piece===EMPTY?'0':piece===BLACK_MAN?'c':'d').join('');}
+
+function initialState(){
+let board=Array(64).fill(EMPTY);
+for(let row=0;row<3;row++)for(let col=0;col<8;col++)if((row+col)%2===1)board[squareOf(row,col)]=WHITE_MAN;
+for(let row=5;row<8;row++)for(let col=0;col<8;col++)if((row+col)%2===1)board[squareOf(row,col)]=BLACK_MAN;
+let state={board,turn:'b',last:null,result:null,noProgress:0,history:[]};state.history=[positionKey(state)];return state;
+}
+
+function moveKey(move){return move.from+'>'+move.path.join('>');}
+
+function applySearchMove(state,move){
+let board=applyMoveToBoard(state.board,move),promoted=!isKing(state.board[move.from])&&isKing(board[move.to]);
+return{board,turn:otherColor(state.turn),noProgress:move.captures.length||promoted?0:(state.noProgress||0)+1};
+}
+
+function gameOutcome(state){
+let black=0,white=0;for(let piece of state.board){if(piece>0)black++;else if(piece<0)white++;}
+if(!black)return{over:true,winner:'w',title:'WHITE WINS',reason:'Black has no pieces remaining.',text:'White wins — Black has no pieces remaining.'};
+if(!white)return{over:true,winner:'b',title:'BLACK WINS',reason:'White has no pieces remaining.',text:'Black wins — White has no pieces remaining.'};
+if(!generateMoves(state.board,state.turn).length){let winner=otherColor(state.turn);return{over:true,winner,title:colorName(winner).toUpperCase()+' WINS',reason:colorName(state.turn)+' has no legal move.',text:colorName(winner)+' wins — '+colorName(state.turn)+' has no legal move.'};}
+let key=positionKey(state),repetitions=0;for(let item of state.history||[])if(item===key)repetitions++;
+if(repetitions>=3)return{over:true,winner:null,title:'DRAW',reason:'The same position occurred three times.',text:'Draw — the same position occurred three times.'};
+if((state.noProgress||0)>=80)return{over:true,winner:null,title:'DRAW',reason:'80 turns passed without a capture or crowning.',text:'Draw — 80 turns passed without a capture or crowning.'};
+return{over:false};
+}
+
+function applyGameMove(state,move){
+let movingPiece=state.board[move.from],board=applyMoveToBoard(state.board,move),promoted=!isKing(movingPiece)&&isKing(board[move.to]);
+let next={board,turn:otherColor(state.turn),last:{from:move.from,to:move.to,path:move.path.slice(),captures:move.captures.slice(),promoted},result:null,noProgress:move.captures.length||promoted?0:(state.noProgress||0)+1,history:[]};
+let key=positionKey(next);next.history=move.captures.length||promoted?[key]:[...(state.history||[]),key].slice(-200);let outcome=gameOutcome(next);if(outcome.over)next.result=outcome;return next;
+}
+
+function moveText(move){let separator=move.captures.length?'×':'–';return[squareName(move.from),...move.path.map(squareName)].join(separator)+(move.promotes?' (King)':'');}
+
+function immediateMobility(board,color){
+let jumps=0,steps=0;
+for(let square=0;square<64;square++)if(pieceColor(board[square])===color){let piece=board[square],row=rowOf(square),col=colOf(square);for(let [dr,dc] of moveDirs(piece)){let nr=row+dr,nc=col+dc;if(onBoard(nr,nc)&&board[squareOf(nr,nc)]===EMPTY)steps++;let lr=row+dr*2,lc=col+dc*2;if(onBoard(lr,lc)){let victim=board[squareOf(nr,nc)];if(victim&&pieceColor(victim)!==color&&board[squareOf(lr,lc)]===EMPTY)jumps++;}}}
+return jumps?jumps*3:steps;
+}
+
+function evaluateBlack(state){
+let score=0,blackCount=0,whiteCount=0,blackKings=0,whiteKings=0;
+for(let square=0;square<64;square++){
+let piece=state.board[square];if(!piece)continue;let color=pieceColor(piece),row=rowOf(square),col=colOf(square),king=isKing(piece),sign=color==='b'?1:-1;
+if(color==='b'){blackCount++;if(king)blackKings++;}else{whiteCount++;if(king)whiteKings++;}
+let value=king?182:100;if(!king){let advance=color==='b'?7-row:row;value+=advance*7;if(advance===6)value+=18;if((color==='b'&&row===7)||(color==='w'&&row===0))value+=8;}
+let centreDistance=Math.abs(3.5-row)+Math.abs(3.5-col);value+=Math.max(0,11-centreDistance*2);if(col===0||col===7)value+=4;
+score+=sign*value;
+for(let [dr,dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]){let nr=row+dr,nc=col+dc;if(onBoard(nr,nc)&&pieceColor(state.board[squareOf(nr,nc)])===color){score+=sign*2;break;}}
+}
+score+=(immediateMobility(state.board,'b')-immediateMobility(state.board,'w'))*3;
+if(blackCount<=5||whiteCount<=5){score+=(blackKings-whiteKings)*18;let blackSquares=[],whiteSquares=[];for(let square=0;square<64;square++){if(state.board[square]>0)blackSquares.push(square);else if(state.board[square]<0)whiteSquares.push(square);}if(blackSquares.length&&whiteSquares.length){let distance=0;for(let b of blackSquares)for(let w of whiteSquares)distance+=Math.abs(rowOf(b)-rowOf(w))+Math.abs(colOf(b)-colOf(w));let average=distance/(blackSquares.length*whiteSquares.length);if(score>80)score+=(14-average)*3;else if(score< -80)score-=(14-average)*3;}}
+score+=state.turn==='b'?3:-3;return score;
+}
+
+function moveOrderingScore(board,move){let score=move.captures.length*1200+(move.promotes?700:0),piece=board[move.from];if(isKing(piece))score+=80;let row=rowOf(move.to),col=colOf(move.to);score+=Math.max(0,7-(Math.abs(3.5-row)+Math.abs(3.5-col)));return score;}
+
+let game=initialState(),selected=-1,selectedMoves=[],jumpPrefix=[];
+let myColor=null,vsCassie=false,freePlay=false,thinking=false,worker=null,aiTimer=null,aiGeneration=0,statusTimer=null;
+let gameCode=null,pollTimer=null,eventSource=null,lastNtfyId='',roomSession='',stateVersion=0,pollBusy=false,networkFailures=0,syncRetryTimer=null,joinWaitTimer=null,peerConnected=false;
+
+const PROTOCOL='cassie-draughts-1',clientId=randomToken(12);
+const boardEl=document.getElementById('board'),statusEl=document.getElementById('status'),connEl=document.getElementById('conn'),thinkEl=document.getElementById('thinkInfo');
+const opponentSelect=document.getElementById('opponentSelect'),difficultySelect=document.getElementById('difficultySelect'),sideSelect=document.getElementById('sideSelect');
+const codeInput=document.getElementById('codeInput'),createBtn=document.getElementById('createBtn'),joinBtn=document.getElementById('joinBtn'),copyBtn=document.getElementById('copyBtn');
+
+function randomToken(length){const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=new Uint8Array(length);crypto.getRandomValues(bytes);return Array.from(bytes,byte=>alphabet[byte%alphabet.length]).join('');}
+function topic(code){return PROTOCOL+'-'+code.toLowerCase();}
+function setStat(text,duration=3000){statusEl.textContent=text;statusEl.classList.add('show');if(statusTimer)clearTimeout(statusTimer);statusTimer=setTimeout(()=>{statusEl.classList.remove('show');statusTimer=null;},duration);}
+function hideStat(){if(statusTimer)clearTimeout(statusTimer);statusTimer=null;statusEl.classList.remove('show');statusEl.textContent='';}
+function clearSelection(){selected=-1;selectedMoves=[];jumpPrefix=[];}
+
+function currentDisplayBoard(){return selected>=0&&jumpPrefix.length?applyPartialMove(game.board,selected,jumpPrefix):game.board;}
+function currentSelectedSquare(){return jumpPrefix.length?jumpPrefix[jumpPrefix.length-1]:selected;}
+function nextTargets(){let targets=new Set();for(let move of selectedMoves)if(move.path.length>jumpPrefix.length){let matches=true;for(let i=0;i<jumpPrefix.length;i++)if(move.path[i]!==jumpPrefix[i])matches=false;if(matches)targets.add(move.path[jumpPrefix.length]);}return targets;}
+
+function render(){
+boardEl.innerHTML='';let flipped=myColor==='w',displayBoard=currentDisplayBoard(),targets=nextTargets(),selectedSquare=currentSelectedSquare();
+for(let displayRow=0;displayRow<8;displayRow++)for(let displayCol=0;displayCol<8;displayCol++){
+let row=flipped?7-displayRow:displayRow,col=flipped?7-displayCol:displayCol,square=squareOf(row,col),piece=displayBoard[square];
+let cell=document.createElement('div');cell.className='square '+((row+col)%2?'dark':'light');cell.dataset.square=square;cell.setAttribute('role','gridcell');
+if(square===selectedSquare)cell.classList.add('selected');
+if(game.last&&(square===game.last.from||square===game.last.to))cell.classList.add('last');
+if(jumpPrefix.includes(square)&&square!==selectedSquare)cell.classList.add('trail');
+if(targets.has(square))cell.classList.add(selectedMoves.some(move=>move.captures.length)?'captureHint':'hint');
+if(piece){let pieceEl=document.createElement('span');pieceEl.className='piece '+(piece>0?'black':'white')+(isKing(piece)?' king':'');pieceEl.setAttribute('aria-hidden','true');cell.appendChild(pieceEl);}
+if(displayRow===7){let label=document.createElement('span');label.className='coord file';label.textContent=FILES[col];cell.appendChild(label);}
+if(displayCol===0){let label=document.createElement('span');label.className='coord rank';label.textContent=8-row;cell.appendChild(label);}
+cell.setAttribute('aria-label',(piece?colorName(pieceColor(piece))+' '+(isKing(piece)?'king':'piece')+' on ':'')+squareName(square));cell.onclick=()=>onSquare(square);boardEl.appendChild(cell);
+}
+let black=game.board.filter(piece=>piece>0).length,white=game.board.filter(piece=>piece<0).length;
+document.getElementById('pieceInfo').textContent='Black '+black+' · White '+white;document.getElementById('turnInfo').textContent=game.result?'Game over':colorName(game.turn);
+let banner=document.getElementById('endBanner');if(game.result){document.getElementById('endTitle').textContent=game.result.title;document.getElementById('endReason').textContent=game.result.reason;banner.classList.add('show');}else banner.classList.remove('show');
+}
+
+function humanMayMove(){
+if(game.result){setStat(game.result.text);return false;}
+if(freePlay)return true;
+if(vsCassie){if(!myColor){setStat('Choose Cassie\'s difficulty and your colour.');return false;}if(game.turn!==myColor){setStat('Cassie is thinking.');return false;}return true;}
+if(!myColor||!gameCode){setStat('Create a game as Black, or enter a code and Join as White.');return false;}
+if(game.turn!==myColor){setStat('It is '+colorName(game.turn)+'\'s turn.');return false;}return true;
+}
+
+function selectPiece(square){
+let legal=generateMoves(game.board,game.turn),moves=legal.filter(move=>move.from===square);
+if(!moves.length){if(legal.length&&legal[0].captures.length)setStat('A capture is compulsory. Choose a piece that can jump.');clearSelection();render();return;}
+selected=square;selectedMoves=moves;jumpPrefix=[];render();
+}
+
+function onSquare(square){
+if(thinking||!humanMayMove())return;
+let targets=nextTargets();
+if(selected>=0&&targets.has(square)){
+let nextPrefix=jumpPrefix.concat(square),candidates=selectedMoves.filter(move=>nextPrefix.every((step,index)=>move.path[index]===step));jumpPrefix=nextPrefix;selectedMoves=candidates;
+let unfinished=candidates.some(move=>move.path.length>jumpPrefix.length);if(unfinished){render();setStat('Continue the compulsory capture.');return;}
+let move=candidates.find(candidate=>candidate.path.length===jumpPrefix.length);if(move)commitMove(move,false);return;
+}
+if(jumpPrefix.length){setStat('This piece must continue capturing.');return;}
+let piece=game.board[square];
+if(piece&&pieceColor(piece)===game.turn){if(selected===square){clearSelection();render();}else selectPiece(square);return;}
+if(piece)setStat('You cannot move the opponent\'s pieces.');clearSelection();render();
+}
+
+function commitMove(move,remote){
+let notation=moveText(move);game=applyGameMove(game,move);clearSelection();render();
+if(game.result)setStat(game.result.text,6000);
+else if(freePlay)setStat(notation+' — '+colorName(game.turn)+' to move.');
+else if(vsCassie)setStat(game.turn===myColor?notation+' — your turn.':notation+' — Cassie is thinking.');
+else setStat(notation+' — '+colorName(game.turn)+(game.turn===myColor?' to move.':' to move; waiting.'));
+if(vsCassie&&!game.result&&game.turn!==myColor)scheduleCassie(180);
+if(!remote&&!vsCassie&&!freePlay&&gameCode){stateVersion++;pushState();}
+}
+
+function validGameState(state){
+if(!state||!Array.isArray(state.board)||state.board.length!==64||!state.board.every(piece=>Number.isInteger(piece)&&piece>=-2&&piece<=2))return false;
+if(state.board.some((piece,square)=>piece!==EMPTY&&(rowOf(square)+colOf(square))%2!==1))return false;
+if(state.board.filter(piece=>piece>0).length>12||state.board.filter(piece=>piece<0).length>12)return false;
+if(!['w','b'].includes(state.turn)||!Number.isInteger(state.noProgress)||state.noProgress<0||state.noProgress>10000)return false;
+if(!Array.isArray(state.history)||state.history.length>200||!state.history.every(key=>typeof key==='string'&&key.length<=70))return false;
+if(state.last!==null&&typeof state.last!=='object')return false;return true;
+}
+
+function publicState(){return{board:game.board,turn:game.turn,last:game.last,result:game.result,noProgress:game.noProgress,history:game.history};}
+
+function stopNetwork(){if(pollTimer)clearInterval(pollTimer);if(eventSource)eventSource.close();if(syncRetryTimer)clearTimeout(syncRetryTimer);if(joinWaitTimer)clearTimeout(joinWaitTimer);pollTimer=null;eventSource=null;syncRetryTimer=null;joinWaitTimer=null;pollBusy=false;networkFailures=0;}
+function leaveRoom(){stopNetwork();cancelCassie();gameCode=null;roomSession='';lastNtfyId='';stateVersion=0;peerConnected=false;copyBtn.hidden=true;['createBtn','joinBtn'].forEach(id=>document.getElementById(id).classList.remove('sel'));}
+function parseNtfy(text){return text.split(/\r?\n/).filter(Boolean).map(line=>{try{return JSON.parse(line);}catch(error){return null;}}).filter(message=>message&&message.event==='message'&&typeof message.message==='string');}
+function parsePacket(message){try{let packet=JSON.parse(message.message);return packet&&packet.protocol===PROTOCOL?packet:null;}catch(error){return null;}}
+async function fetchMessages(code,since){let response=await fetch('https://ntfy.sh/'+topic(code)+'/json?poll=1&since='+encodeURIComponent(since||'all'),{cache:'no-store'});if(!response.ok)throw new Error('ntfy read failed: '+response.status);return parseNtfy(await response.text());}
+async function publishPacket(packet){if(!gameCode)throw new Error('No game code');let response=await fetch('https://ntfy.sh/'+topic(gameCode),{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({protocol:PROTOCOL,session:roomSession,sender:clientId,...packet})});if(!response.ok)throw new Error('ntfy publish failed: '+response.status);let receipt=await response.json();if(receipt&&receipt.id)lastNtfyId=receipt.id;networkFailures=0;return receipt;}
+async function pushState(){if(!gameCode||!roomSession)return;let version=stateVersion;try{await publishPacket({kind:'state',version,state:publicState()});if(syncRetryTimer)clearTimeout(syncRetryTimer);syncRetryTimer=null;connEl.textContent=(peerConnected?'Connected':'Synced')+' - Code '+gameCode;}catch(error){networkFailures++;connEl.textContent='Sync error - retrying';if(!syncRetryTimer)syncRetryTimer=setTimeout(()=>{syncRetryTimer=null;if(version===stateVersion)pushState();},2500);}}
+
+function applyRemoteState(packet){
+if(!Number.isInteger(packet.version)||packet.version<=stateVersion||!validGameState(packet.state))return;
+game={...packet.state,board:packet.state.board.slice(),history:packet.state.history.slice()};stateVersion=packet.version;clearSelection();peerConnected=true;render();setStat(game.result?game.result.text:(game.turn===myColor?'Your turn.':colorName(game.turn)+' to move; waiting.'));connEl.textContent='Connected - Code '+gameCode;
+}
+
+async function handleMessages(messages){for(let message of messages){lastNtfyId=message.id||lastNtfyId;let packet=parsePacket(message);if(!packet||packet.session!==roomSession||packet.sender===clientId)continue;if(packet.kind==='state')applyRemoteState(packet);if(packet.kind==='join'&&myColor==='b'){peerConnected=true;connEl.textContent='Connected - Code '+gameCode;setStat('White joined. Black moves first.');await publishPacket({kind:'ack'});await pushState();}if(packet.kind==='ack'&&myColor==='w'){peerConnected=true;if(joinWaitTimer)clearTimeout(joinWaitTimer);joinWaitTimer=null;connEl.textContent='Connected - Code '+gameCode;setStat(game.turn===myColor?'Your turn.':'Connected; waiting for Black.');}}}
+async function pollOnce(){if(pollBusy||!gameCode||!roomSession||vsCassie)return;pollBusy=true;try{let messages=await fetchMessages(gameCode,lastNtfyId||'all');await handleMessages(messages);networkFailures=0;}catch(error){networkFailures++;if(networkFailures>=3)connEl.textContent='Connection interrupted - retrying';}finally{pollBusy=false;}}
+function startPoll(){stopNetwork();if(typeof EventSource==='function'){let since=lastNtfyId||'all';eventSource=new EventSource('https://ntfy.sh/'+topic(gameCode)+'/sse?since='+encodeURIComponent(since));eventSource.onmessage=async event=>{try{let message=JSON.parse(event.data);await handleMessages([message]);networkFailures=0;}catch(error){}};eventSource.onopen=()=>{networkFailures=0;if(!peerConnected)connEl.textContent='Listening - Code '+gameCode;};eventSource.onerror=()=>{networkFailures++;if(networkFailures>=2)connEl.textContent='Connection interrupted - retrying';};return;}pollTimer=setInterval(pollOnce,4000);pollOnce();}
+
+function getWorker(){
+if(worker)return worker;
+let core=[rowOf,colOf,squareOf,onBoard,otherColor,pieceColor,isKing,isCrownRow,moveDirs,cloneBoard,captureMovesFrom,simpleMovesFrom,generateMoves,applyMoveToBoard,positionKey,moveKey,applySearchMove,immediateMobility,evaluateBlack,moveOrderingScore].map(fn=>fn.toString()).join('\n');
+let code=`'use strict';const SIZE=${SIZE},EMPTY=${EMPTY},BLACK_MAN=${BLACK_MAN},BLACK_KING=${BLACK_KING},WHITE_MAN=${WHITE_MAN},WHITE_KING=${WHITE_KING},MATE=${MATE};
+${core}
+let startTime=0,timeLimit=0,timedOut=false,nodes=0,table=new Map();
+function timeExpired(){nodes++;if((nodes&1023)===0&&Date.now()-startTime>=timeLimit)timedOut=true;return timedOut;}
+function terminalScore(state,moves,ply){if(moves.length)return null;return state.turn==='b'?-MATE+ply:MATE-ply;}
+function orderedMoves(state,moves,preferred){return moves.sort((a,b)=>(moveKey(b)===preferred?1000000:0)+moveOrderingScore(state.board,b)-(moveKey(a)===preferred?1000000:0)-moveOrderingScore(state.board,a));}
+function quiescence(state,alpha,beta,ply,left){
+if(timeExpired())return 0;let moves=generateMoves(state.board,state.turn),terminal=terminalScore(state,moves,ply);if(terminal!==null)return terminal;if((state.noProgress||0)>=80)return 0;
+let stand=evaluateBlack(state),captures=moves[0]&&moves[0].captures.length;if(!captures||left<=0)return stand;
+orderedMoves(state,moves,'');if(state.turn==='b'){let best=-Infinity;for(let move of moves){let score=quiescence(applySearchMove(state,move),alpha,beta,ply+1,left-1);if(timedOut)return 0;best=Math.max(best,score);alpha=Math.max(alpha,score);if(alpha>=beta)break;}return best;}
+let best=Infinity;for(let move of moves){let score=quiescence(applySearchMove(state,move),alpha,beta,ply+1,left-1);if(timedOut)return 0;best=Math.min(best,score);beta=Math.min(beta,score);if(alpha>=beta)break;}return best;
+}
+function alphaBeta(state,depth,alpha,beta,ply){
+if(timeExpired())return 0;let key=positionKey(state),entry=table.get(key),originalAlpha=alpha,originalBeta=beta,preferred=entry&&entry.best||'';
+if(entry&&entry.depth>=depth){if(entry.flag==='exact')return entry.score;if(entry.flag==='lower')alpha=Math.max(alpha,entry.score);else if(entry.flag==='upper')beta=Math.min(beta,entry.score);if(alpha>=beta)return entry.score;}
+let moves=generateMoves(state.board,state.turn),terminal=terminalScore(state,moves,ply);if(terminal!==null)return terminal;if((state.noProgress||0)>=80)return 0;if(depth<=0)return quiescence(state,alpha,beta,ply,5);
+orderedMoves(state,moves,preferred);let best=state.turn==='b'?-Infinity:Infinity,bestKey='';
+if(state.turn==='b'){for(let move of moves){let score=alphaBeta(applySearchMove(state,move),depth-1,alpha,beta,ply+1);if(timedOut)return 0;if(score>best){best=score;bestKey=moveKey(move);}alpha=Math.max(alpha,best);if(alpha>=beta)break;}}
+else{for(let move of moves){let score=alphaBeta(applySearchMove(state,move),depth-1,alpha,beta,ply+1);if(timedOut)return 0;if(score<best){best=score;bestKey=moveKey(move);}beta=Math.min(beta,best);if(alpha>=beta)break;}}
+let flag=best<=originalAlpha?'upper':best>=originalBeta?'lower':'exact';table.set(key,{depth,score:best,flag,best:bestKey});return best;
+}
+function rootSearch(state,depth,preferred){
+let moves=orderedMoves(state,generateMoves(state.board,state.turn),preferred),scores=[],alpha=-MATE,beta=MATE,best=null,bestScore=state.turn==='b'?-Infinity:Infinity;
+for(let move of moves){if(Date.now()-startTime>=timeLimit){timedOut=true;break;}let score=alphaBeta(applySearchMove(state,move),depth-1,alpha,beta,1);if(timedOut)break;scores.push({move,score});if((state.turn==='b'&&score>bestScore)||(state.turn==='w'&&score<bestScore)){bestScore=score;best=move;}if(state.turn==='b')alpha=Math.max(alpha,bestScore);else beta=Math.min(beta,bestScore);}
+return{best,bestScore,scores};
+}
+self.onmessage=function(event){
+let {state,targetDepth,limit,difficulty}=event.data;startTime=Date.now();timeLimit=limit;timedOut=false;nodes=0;table=new Map();let legal=generateMoves(state.board,state.turn),best=legal[0]||null,bestScore=state.turn==='b'?-Infinity:Infinity,completedDepth=0,preferred='',finalScores=[];
+for(let depth=1;depth<=targetDepth&&legal.length;depth++){timedOut=false;let result=rootSearch(state,depth,preferred);if(timedOut||!result.best)break;best=result.best;bestScore=result.bestScore;finalScores=result.scores;completedDepth=depth;preferred=moveKey(best);self.postMessage({progress:true,depth,nodes,score:bestScore,best});if(Math.abs(bestScore)>MATE-100)break;}
+if(difficulty==='Easy'&&finalScores.length>1){finalScores.sort((a,b)=>state.turn==='b'?b.score-a.score:a.score-b.score);let pool=finalScores.slice(0,Math.min(4,finalScores.length)),weights=[48,28,16,8].slice(0,pool.length),total=weights.reduce((a,b)=>a+b,0),roll=Math.random()*total;for(let i=0;i<pool.length;i++){roll-=weights[i];if(roll<=0){best=pool[i].move;bestScore=pool[i].score;break;}}}
+self.postMessage({progress:false,best,score:bestScore,depth:completedDepth,nodes});
+};`;
+let blob=new Blob([code],{type:'application/javascript'});worker=new Worker(URL.createObjectURL(blob));return worker;
+}
+
+function cassieColor(){return myColor==='b'?'w':'b';}
+function isCassieTurn(){return!!(vsCassie&&!game.result&&myColor&&game.turn===cassieColor());}
+function cancelCassie(){if(aiTimer)clearTimeout(aiTimer);aiTimer=null;aiGeneration++;if(worker){worker.terminate();worker=null;}thinking=false;thinkEl.textContent='';}
+function scheduleCassie(delay=150){if(!isCassieTurn()||thinking)return;if(aiTimer)clearTimeout(aiTimer);let generation=aiGeneration;aiTimer=setTimeout(()=>{aiTimer=null;if(generation===aiGeneration)cassieMove();},delay);}
+
+function applyCassieMove(candidate,expectedTurn,generation){
+thinking=false;thinkEl.textContent='';if(generation!==aiGeneration||!isCassieTurn()||game.turn!==expectedTurn||!candidate)return;let legal=generateMoves(game.board,game.turn),move=legal.find(item=>moveKey(item)===moveKey(candidate));if(move)commitMove(move,false);
+}
+
+function cassieMove(){
+if(!isCassieTurn()||thinking)return;let expectedTurn=game.turn,generation=aiGeneration,mode=difficultySelect.value||'Easy',settings=mode==='Hard'?{depth:14,limit:6000}:mode==='Medium'?{depth:8,limit:1800}:{depth:3,limit:450};
+thinking=true;thinkEl.textContent='Cassie is thinking...';let w=getWorker();w.onmessage=event=>{if(generation!==aiGeneration)return;if(event.data.progress){if(isCassieTurn()&&game.turn===expectedTurn)thinkEl.textContent='Cassie: depth '+event.data.depth+' · '+event.data.nodes.toLocaleString()+' positions';return;}applyCassieMove(event.data.best,expectedTurn,generation);};
+w.onerror=()=>{if(generation!==aiGeneration)return;thinking=false;thinkEl.textContent='';w.terminate();if(worker===w)worker=null;setStat('Cassie stopped unexpectedly. Tap Reset to try again.');};w.postMessage({state:publicState(),targetDepth:settings.depth,limit:settings.limit,difficulty:mode});
+}
+
+function setRole(color,isCassie){myColor=color;document.getElementById('myRole').textContent=colorName(color)+(isCassie?' vs Cassie':'');if(isCassie)sideSelect.value=color;render();}
+function selectConnectionButton(id){['createBtn','joinBtn'].forEach(buttonId=>document.getElementById(buttonId).classList.toggle('sel',buttonId===id));}
+function updateSetupAvailability(){let cassie=opponentSelect.value==='cassie';difficultySelect.disabled=!cassie;sideSelect.disabled=!cassie;if(!cassie){difficultySelect.value='';sideSelect.value='';}}
+function setHumanMenu(){freePlay=false;opponentSelect.value='human';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();document.getElementById('modeInfo').textContent='Human';}
+
+function chooseHumanSetup(showMessage=true){leaveRoom();vsCassie=false;setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';game=initialState();clearSelection();render();connEl.textContent='Offline';if(showMessage)setStat('Human game: create as Black, or join as White with a code.');}
+function chooseFreePlaySetup(){leaveRoom();vsCassie=false;freePlay=true;opponentSelect.value='free';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();myColor=null;document.getElementById('myRole').textContent='Both sides';codeInput.value='';document.getElementById('modeInfo').textContent='Free Play';game=initialState();clearSelection();render();connEl.textContent='Same-phone game';setStat('Free Play — Black moves first. Move either side in turn.');}
+function chooseCassieSetup(){leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';document.getElementById('modeInfo').textContent='Cassie';game=initialState();clearSelection();render();connEl.textContent='Offline Cassie game';setStat('Choose Cassie\'s difficulty and your colour.');}
+function startCassie(mode,color){leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';updateSetupAvailability();difficultySelect.value=mode;sideSelect.value=color;document.getElementById('modeInfo').textContent='Cassie - '+mode;game=initialState();clearSelection();setRole(color,true);codeInput.value='';setStat(mode+' Cassie — '+(color==='b'?'you are Black; your move.':'you are White; Cassie opens as Black.'));connEl.textContent='Offline Cassie game';if(game.turn!==myColor)scheduleCassie(220);}
+function refreshCassieGame(){if(opponentSelect.value!=='cassie')return;let mode=difficultySelect.value,color=sideSelect.value;if(mode&&color){startCassie(mode,color);return;}leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';updateSetupAvailability();difficultySelect.value=mode;sideSelect.value=color;myColor=null;document.getElementById('myRole').textContent='-';document.getElementById('modeInfo').textContent=mode?'Cassie - '+mode:'Cassie';game=initialState();clearSelection();render();connEl.textContent='Offline Cassie game';setStat(mode?'Choose whether to play Black or White against Cassie.':'Choose Cassie\'s difficulty.');}
+
+opponentSelect.onchange=()=>opponentSelect.value==='cassie'?chooseCassieSetup():opponentSelect.value==='free'?chooseFreePlaySetup():chooseHumanSetup();
+difficultySelect.onchange=refreshCassieGame;sideSelect.onchange=refreshCassieGame;
+codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,'').slice(0,4);});
+
+createBtn.onclick=async()=>{
+leaveRoom();selectConnectionButton('createBtn');vsCassie=false;setHumanMenu();game=initialState();clearSelection();setRole('b',false);gameCode=randomToken(4);roomSession=randomToken(16);stateVersion=0;codeInput.value=gameCode;copyBtn.hidden=false;createBtn.disabled=true;joinBtn.disabled=true;setStat('Creating game '+gameCode+'...');connEl.textContent='Connecting...';
+try{await publishPacket({kind:'state',version:stateVersion,state:publicState()});setStat('Game '+gameCode+' created. Share the code; Black moves first.');connEl.textContent='Waiting for White - Code '+gameCode;startPoll();}catch(error){leaveRoom();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';game=initialState();clearSelection();render();setStat('Could not create the game. Check your internet connection and try again.');connEl.textContent='Connection failed';}finally{createBtn.disabled=false;joinBtn.disabled=false;}
+};
+
+joinBtn.onclick=async()=>{
+let code=codeInput.value.trim().toUpperCase();if(!/^[A-HJ-NP-Z2-9]{4}$/.test(code)){setStat('Enter the four-character game code.');return;}
+leaveRoom();selectConnectionButton('joinBtn');vsCassie=false;setHumanMenu();game=initialState();clearSelection();setRole('w',false);gameCode=code;createBtn.disabled=true;joinBtn.disabled=true;setStat('Looking for game '+code+'...');connEl.textContent='Joining...';
+try{let messages=await fetchMessages(code,'all'),found=null;for(let i=messages.length-1;i>=0;i--){let packet=parsePacket(messages[i]);if(packet&&packet.kind==='state'&&validGameState(packet.state)){found={message:messages[i],packet};break;}}if(!found)throw new Error('room-not-found');roomSession=found.packet.session;game={...found.packet.state,board:found.packet.state.board.slice(),history:found.packet.state.history.slice()};stateVersion=Number.isInteger(found.packet.version)?found.packet.version:0;lastNtfyId=messages[messages.length-1].id||found.message.id;render();setStat('Game found. Waiting for Black to confirm...');connEl.textContent='Found '+code+' - contacting Black';await publishPacket({kind:'join'});startPoll();joinWaitTimer=setTimeout(()=>{if(!peerConnected&&gameCode===code){connEl.textContent='Black is not responding';setStat('The game was found, but Black may have closed it. Ask Black to create a new code.');}},9000);}catch(error){leaveRoom();setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';render();setStat(error.message==='room-not-found'?'No active game was found for that code. Check it with Black.':'Could not join. Check your internet connection and try again.');connEl.textContent='Connection failed';}finally{createBtn.disabled=false;joinBtn.disabled=false;}
+};
+
+copyBtn.onclick=async()=>{if(!gameCode)return;try{await navigator.clipboard.writeText(gameCode);copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent='Copy',1200);}catch(error){codeInput.focus();codeInput.select();setStat('Code '+gameCode+' selected — copy it and send it to White.');}};
+
+function resetAllSettings(){hideStat();leaveRoom();vsCassie=false;freePlay=false;setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';copyBtn.textContent='Copy';createBtn.disabled=false;joinBtn.disabled=false;game=initialState();clearSelection();render();connEl.textContent='Offline';setStat('Reset complete — choose Human, Cassie or Free Play.');}
+
+document.getElementById('resetBtn').onclick=resetAllSettings;
+document.getElementById('howBtn').onclick=()=>{document.getElementById('rulesModal').style.display='flex';};
+document.getElementById('closeRules').onclick=()=>{document.getElementById('rulesModal').style.display='none';};
+document.getElementById('rulesModal').onclick=event=>{if(event.target.id==='rulesModal')event.currentTarget.style.display='none';};
+window.addEventListener('beforeunload',()=>{stopNetwork();cancelCassie();});
+
+setHumanMenu();render();
+</script>
+</body>
+</html>

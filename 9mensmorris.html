@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Nine Men's Morris</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#1a1a2e;color:#eee;font-family:system-ui;display:flex;flex-direction:column;align-items:center;padding:5px}
+h1{font-size:clamp(1.35rem,6.2vw,1.75rem);line-height:1.05;margin:2px 0 4px;letter-spacing:2px;text-align:center}
+#status{position:fixed;z-index:120;top:6px;left:50%;transform:translate(-50%,-12px);width:min(92vw,480px);padding:8px 10px;background:#16213e;border:1px solid #334155;border-radius:9px;text-align:center;line-height:1.25;font-size:.82rem;box-shadow:0 4px 18px #0008;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s,transform .18s,visibility .18s}
+#status.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+.setupControls{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,.72fr);gap:5px;width:96vw;max-width:520px;margin:3px 0}
+.setupControls select:last-child{grid-column:1/-1}
+select{width:100%;height:34px;padding:5px 27px 5px 9px;border:1px solid #355071;border-radius:8px;background:#0f3460;color:#fff;font:600 .8rem system-ui;cursor:pointer}
+select:disabled{opacity:.45;cursor:not-allowed}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin:3px 0;width:96vw;max-width:520px}
+button{min-height:32px;background:#0f3460;color:#fff;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.78rem}
+button.sel{background:#eab308;color:#000;font-weight:800}
+button.big{font-weight:800}
+button.infoBtn{background:#334155}
+button:disabled{opacity:.55;cursor:wait}
+input{height:32px;padding:5px 7px;border-radius:8px;border:1px solid #444;background:#0f0f23;color:#fff;width:84px;text-align:center;text-transform:uppercase;font-size:.78rem;font-weight:700}
+#boardWrap{position:relative;width:96vw;max-width:520px;aspect-ratio:1/1}
+#board{position:relative;width:100%;height:100%;background:radial-gradient(circle at 48% 43%,#eadfc5 0,#d9c49c 72%,#b58c59 100%);border:4px solid #3a3a5c;border-radius:7px;overflow:hidden;touch-action:manipulation;box-shadow:inset 0 0 18px #6b452b55}
+#boardLines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#boardLines rect,#boardLines line{fill:none;stroke:#493522;stroke-width:1.45;stroke-linecap:round;stroke-linejoin:round}
+.point{position:absolute;width:12.5%;aspect-ratio:1/1;min-height:0;padding:0;border:0;border-radius:50%;background:transparent;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;z-index:2;user-select:none;-webkit-user-select:none;overflow:visible}
+.point:focus-visible{outline:3px solid #38bdf8;outline-offset:1px}
+.node{position:absolute;width:17%;height:17%;border-radius:50%;background:#493522;box-shadow:0 1px 2px #0008;pointer-events:none}
+.marker{position:absolute;inset:2%;border:0 solid transparent;border-radius:50%;pointer-events:none;z-index:1}
+.piece{position:absolute;z-index:2;width:72%;height:72%;border-radius:50%;pointer-events:none;box-shadow:inset 0 3px 3px #fff3,inset 0 -5px 6px #0007,0 3px 5px #0009}
+.piece.black{background:radial-gradient(circle at 36% 27%,#554132 0,#261a13 54%,#080604 100%);border:2px solid #080503}
+.piece.white{background:radial-gradient(circle at 36% 27%,#fff 0,#eee9dc 56%,#aaa293 100%);border:2px solid #827b70}
+.point.hint .node{width:25%;height:25%;background:#65a30d;box-shadow:0 0 8px #84cc16}
+.point.selected .marker{border:4px solid #38bdf8;background:#38bdf824;box-shadow:0 0 12px #38bdf8}
+.point.lastFrom .marker{border:4px dashed #facc15b8;background:#facc151d}
+.point.lastTo .marker{border:4px solid #facc15;background:#facc1520;box-shadow:0 0 12px #facc15aa}
+.point.lastTo .piece{box-shadow:inset 0 3px 3px #fff3,inset 0 -5px 6px #0007,0 0 0 3px #facc15,0 0 14px #facc15}
+.point.lastRemoved .marker{border:4px solid #ef4444b8;background:#facc1538;box-shadow:0 0 9px #ef444488}
+.point.captureTarget .marker{border:4px solid #ef4444;background:#ef444421;box-shadow:0 0 13px #ef4444;animation:capturePulse .9s ease-in-out infinite alternate}
+.point.captureTarget .piece{filter:brightness(1.14)}
+@keyframes capturePulse{from{transform:scale(.9);opacity:.72}to{transform:scale(1.08);opacity:1}}
+#endBanner{position:absolute;z-index:20;left:6%;right:6%;top:50%;transform:translateY(-50%);display:none;padding:16px 10px;border:2px solid #facc15;border-radius:12px;background:rgba(15,23,42,.72);box-shadow:0 6px 28px #0009;text-align:center;pointer-events:none;backdrop-filter:blur(1px)}
+#endBanner.show{display:block}
+#endTitle{font-size:clamp(1.65rem,8vw,3rem);font-weight:900;letter-spacing:2px;color:#facc15;text-shadow:0 2px 3px #000}
+#endReason{margin-top:4px;font-size:clamp(.8rem,3.5vw,1rem);font-weight:700;color:#fff}
+#info{font-size:.8rem;margin:5px 5px 2px;text-align:center;line-height:1.35}
+#rulesModal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:110;padding:12px}
+#rulesBox{background:#f8f1e0;color:#1a1a1a;border-radius:14px;max-width:520px;width:96vw;max-height:90vh;overflow:auto;padding:18px 16px;line-height:1.45}
+#rulesBox h2{margin-top:0}#rulesBox h3{margin:14px 0 6px}
+#closeRules{margin-top:12px;width:100%;background:#0f3460;color:#fff;padding:10px;border-radius:9px;border:none;font-weight:700}
+@media(min-width:440px){.setupControls{grid-template-columns:1fr .72fr 1.55fr}.setupControls select:last-child{grid-column:auto}}
+</style>
+</head>
+<body>
+
+<h1>NINE MEN'S MORRIS</h1>
+<div id="status" role="status" aria-live="polite"></div>
+
+<div class="setupControls">
+<select id="opponentSelect" aria-label="Choose opponent"><option value="human" selected>Versus Human</option><option value="cassie">Versus Cassie</option><option value="free">Free Play (same phone)</option></select>
+<select id="difficultySelect" aria-label="Choose Cassie difficulty" disabled><option value="" selected disabled hidden>Difficulty</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>
+<select id="sideSelect" aria-label="Choose your colour against Cassie" disabled><option value="" selected disabled hidden>Choose colour</option><option value="b">Play Black against Cassie</option><option value="w">Play White against Cassie</option></select>
+</div>
+
+<div class="controls"><button id="createBtn" class="big">Create Game</button><input id="codeInput" placeholder="GAME CODE" maxlength="4" aria-label="Four-character game code"><button id="joinBtn" class="big">Join Game</button><button id="copyBtn" hidden>Copy</button><button id="resetBtn">Reset</button><button id="howBtn" class="infoBtn">? How to Play</button></div>
+
+<div id="boardWrap"><div id="board" role="group" aria-label="Nine Men's Morris board">
+<svg id="boardLines" viewBox="0 0 100 100" aria-hidden="true"><rect x="5" y="5" width="90" height="90"/><rect x="20" y="20" width="60" height="60"/><rect x="35" y="35" width="30" height="30"/><line x1="50" y1="5" x2="50" y2="35"/><line x1="50" y1="65" x2="50" y2="95"/><line x1="5" y1="50" x2="35" y2="50"/><line x1="65" y1="50" x2="95" y2="50"/></svg>
+<div id="points"></div></div><div id="endBanner" role="status" aria-live="polite"><div id="endTitle"></div><div id="endReason"></div></div></div>
+<div id="info">You: <b><span id="myRole">-</span></b> | Turn: <b><span id="turnInfo">Black</span></b> | <span id="modeInfo">Human</span><br><span id="pieceInfo">Black 0 (+9) · White 0 (+9)</span> | <span id="phaseInfo">Placing</span><br><span id="conn" style="color:#22c55e">Offline</span><br><span id="thinkInfo" style="color:#facc15"></span></div>
+
+<div id="rulesModal"><div id="rulesBox">
+<h2>Nine Men's Morris</h2>
+<p>Nine Men's Morris, also called <b>Mill</b> or <b>Merels</b>, is played on the 24 points where the board's lines meet. Each player has nine pieces. Black moves first in this edition.</p>
+
+<h3>Goal</h3>
+<p>Win by reducing your opponent to two pieces, or by leaving them unable to make a legal move after all pieces have been placed.</p>
+
+<h3>1. Placing</h3>
+<p>Players alternate placing one piece on any empty point. If your three pieces fill one straight board line, they form a <b>mill</b>. Every time you form a mill, you must remove one opposing piece.</p>
+
+<h3>Removing a piece</h3>
+<p>You must take an opposing piece that is not in a mill if one is available. If every opposing piece is in a mill, any one of them may be taken. Red rings show the pieces you may remove.</p>
+
+<h3>2. Moving and flying</h3>
+<p>After all 18 pieces have been placed, move one piece per turn along a board line to an adjacent empty point. When you have only three pieces left, you may <b>fly</b>: move to any empty point. Making a new mill still permits one removal.</p>
+
+<h3>Playing here</h3>
+<p>Green dots show legal destinations. Blue marks your selected piece. Yellow marks the previous move, and a red-and-yellow empty ring marks a captured piece.</p>
+<p>In an online human game, the creator plays Black and shares the four-character code; the player who joins is White. Choose <b>Free Play</b> for two people sharing one phone, or to explore both sides yourself. Against Cassie, choose Easy, Medium or Hard and then choose your colour. Reset leaves the current game and restores every setting.</p>
+<p>This edition uses the three-piece flying rule. It declares a draw after the same completed position occurs three times, or after 100 consecutive movement turns without a capture.</p>
+
+<h3>Tips</h3>
+<p>Junctions with four connecting lines are flexible. Look for two-piece lines with an empty third point, and especially for positions where one move opens one mill while closing another. During placement, blocking an immediate enemy mill can be as important as building your own.</p>
+
+<button id="closeRules">Close</button>
+</div></div>
+
+<script>
+'use strict';
+
+const EMPTY=0,BLACK=1,WHITE=-1,WIN=1000000;
+const POINT_NAMES=['a7','d7','g7','b6','d6','f6','c5','d5','e5','a4','b4','c4','e4','f4','g4','c3','d3','e3','b2','d2','f2','a1','d1','g1'];
+const POINT_COORDS=[[0,0],[3,0],[6,0],[1,1],[3,1],[5,1],[2,2],[3,2],[4,2],[0,3],[1,3],[2,3],[4,3],[5,3],[6,3],[2,4],[3,4],[4,4],[1,5],[3,5],[5,5],[0,6],[3,6],[6,6]];
+const ADJ=[[1,9],[0,2,4],[1,14],[4,10],[1,3,5,7],[4,13],[7,11],[4,6,8],[7,12],[0,10,21],[3,9,11,18],[6,10,15],[8,13,17],[5,12,14,20],[2,13,23],[11,16],[15,17,19],[12,16],[10,19],[16,18,20,22],[13,19],[9,22],[19,21,23],[14,22]];
+const MILLS=[[0,1,2],[3,4,5],[6,7,8],[9,10,11],[12,13,14],[15,16,17],[18,19,20],[21,22,23],[0,9,21],[3,10,18],[6,11,15],[1,4,7],[16,19,22],[8,12,17],[5,13,20],[2,14,23]];
+const POINT_MILLS=Array.from({length:24},(_,point)=>MILLS.filter(mill=>mill.includes(point)));
+const POINT_VALUE=ADJ.map(neighbours=>neighbours.length===4?16:neighbours.length===3?9:4);
+
+function otherColor(color){return color==='b'?'w':'b';}
+function colorValue(color){return color==='b'?BLACK:WHITE;}
+function pieceColor(piece){return piece===BLACK?'b':piece===WHITE?'w':null;}
+function colorName(color){return color==='b'?'Black':'White';}
+function cloneBoard(board){return board.slice();}
+function countPieces(board,color){let mine=colorValue(color),count=0;for(let piece of board)if(piece===mine)count++;return count;}
+function handCount(state,color){return color==='b'?state.blackInHand:state.whiteInHand;}
+function allPlaced(state){return state.blackInHand===0&&state.whiteInHand===0;}
+function isInMill(board,point,color){let mine=colorValue(color);return POINT_MILLS[point].some(mill=>mill.every(place=>board[place]===mine));}
+function countMills(board,color){let mine=colorValue(color),count=0;for(let mill of MILLS)if(mill.every(point=>board[point]===mine))count++;return count;}
+function eligibleRemovals(board,color){let pieces=[];for(let point=0;point<24;point++)if(board[point]===colorValue(color))pieces.push(point);let exposed=pieces.filter(point=>!isInMill(board,point,color));return exposed.length?exposed:pieces;}
+
+function generateBaseMoves(state,color=state.turn){
+if(state.result)return[];let moves=[],mine=colorValue(color),inHand=handCount(state,color);
+if(inHand>0){for(let to=0;to<24;to++)if(state.board[to]===EMPTY)moves.push({from:-1,to});return moves;}
+let pieces=countPieces(state.board,color);if(pieces<3)return moves;let flying=pieces===3;
+for(let from=0;from<24;from++)if(state.board[from]===mine){if(flying){for(let to=0;to<24;to++)if(state.board[to]===EMPTY)moves.push({from,to});}else for(let to of ADJ[from])if(state.board[to]===EMPTY)moves.push({from,to});}
+return moves;
+}
+
+function boardAfterBase(board,move,color){let next=cloneBoard(board),mine=colorValue(color);if(move.from>=0)next[move.from]=EMPTY;next[move.to]=mine;return next;}
+function generateActions(state){
+let color=state.turn,opponent=otherColor(color),actions=[];
+for(let move of generateBaseMoves(state,color)){let board=boardAfterBase(state.board,move,color);if(isInMill(board,move.to,color)){let removals=eligibleRemovals(board,opponent);if(removals.length){for(let remove of removals)actions.push({from:move.from,to:move.to,remove});continue;}}actions.push({from:move.from,to:move.to,remove:-1});}
+return actions;
+}
+function moveKey(move){return move.from+'>'+move.to+'x'+move.remove;}
+function positionKey(state){return state.turn+'|'+state.blackInHand+','+state.whiteInHand+'|'+state.board.map(piece=>piece===BLACK?'b':piece===WHITE?'w':'0').join('');}
+
+function applySearchAction(state,action){
+let mover=state.turn,board=boardAfterBase(state.board,action,mover),blackInHand=state.blackInHand,whiteInHand=state.whiteInHand;
+if(action.from<0){if(mover==='b')blackInHand--;else whiteInHand--;}
+if(action.remove>=0)board[action.remove]=EMPTY;
+let wasMovement=allPlaced(state),nowMovement=blackInHand===0&&whiteInHand===0,noProgress=!nowMovement?0:(!wasMovement||action.remove>=0?0:(state.noProgress||0)+1);
+return{board,turn:otherColor(mover),blackInHand,whiteInHand,noProgress};
+}
+
+function gameOutcome(state){
+if(!allPlaced(state))return{over:false};let current=state.turn,currentCount=countPieces(state.board,current);
+if(currentCount<3){let winner=otherColor(current);return{over:true,winner,title:colorName(winner).toUpperCase()+' WINS',reason:colorName(current)+' has only '+currentCount+' pieces.',text:colorName(winner)+' wins — '+colorName(current)+' has fewer than three pieces.'};}
+if(!generateBaseMoves(state,current).length){let winner=otherColor(current);return{over:true,winner,title:colorName(winner).toUpperCase()+' WINS',reason:colorName(current)+' has no legal move.',text:colorName(winner)+' wins — '+colorName(current)+' cannot move.'};}
+let key=positionKey(state),repetitions=0;for(let item of state.history||[])if(item===key)repetitions++;
+if(repetitions>=3)return{over:true,winner:null,title:'DRAW',reason:'The same position occurred three times.',text:'Draw — the same position occurred three times.'};
+if((state.noProgress||0)>=100)return{over:true,winner:null,title:'DRAW',reason:'100 movement turns passed without a capture.',text:'Draw — 100 movement turns passed without a capture.'};
+return{over:false};
+}
+
+function initialState(){let state={board:Array(24).fill(EMPTY),turn:'b',blackInHand:9,whiteInHand:9,last:null,result:null,noProgress:0,history:[]};state.history=[positionKey(state)];return state;}
+
+function applyGameAction(state,action){
+let mover=state.turn,next=applySearchAction(state,action),formedMill=isInMill(next.board,action.to,mover),key=positionKey(next);
+next.last={from:action.from,to:action.to,remove:action.remove,mover,formedMill};next.result=null;
+next.history=action.from<0||action.remove>=0?[key]:[...(state.history||[]),key].slice(-220);
+let outcome=gameOutcome(next);if(outcome.over)next.result=outcome;return next;
+}
+
+function actionText(action){let text=action.from<0?'Placed '+POINT_NAMES[action.to]:POINT_NAMES[action.from]+'–'+POINT_NAMES[action.to];if(action.remove>=0)text+='; took '+POINT_NAMES[action.remove];return text;}
+
+function lineFeatures(board,color){
+let mine=colorValue(color),mills=0,pairs=0,singles=0,threats=Array(24).fill(0);
+for(let mill of MILLS){let own=0,empty=[];for(let point of mill){if(board[point]===mine)own++;else if(board[point]===EMPTY)empty.push(point);}if(own===3)mills++;else if(own===2&&empty.length===1){pairs++;threats[empty[0]]++;}else if(own===1&&empty.length===2)singles++;}
+let forks=0;for(let value of threats)if(value>=2)forks+=value-1;return{mills,pairs,singles,forks,threats};
+}
+
+function movementStats(board,color){
+let mine=colorValue(color),pieces=countPieces(board,color),moves=0,blocked=0;if(pieces===3){let empty=24-countPieces(board,'b')-countPieces(board,'w');return{moves:pieces*empty,blocked:0};}
+for(let from=0;from<24;from++)if(board[from]===mine){let freedom=0;for(let to of ADJ[from])if(board[to]===EMPTY)freedom++;moves+=freedom;if(!freedom)blocked++;}return{moves,blocked};
+}
+
+function evaluateBlack(state){
+let board=state.board,black=countPieces(board,'b'),white=countPieces(board,'w'),blackTotal=black+state.blackInHand,whiteTotal=white+state.whiteInHand,score=(blackTotal-whiteTotal)*210;
+let bf=lineFeatures(board,'b'),wf=lineFeatures(board,'w');score+=(bf.mills-wf.mills)*92+(bf.pairs-wf.pairs)*38+(bf.singles-wf.singles)*5+(bf.forks-wf.forks)*78;
+for(let point=0;point<24;point++){if(board[point]===BLACK)score+=POINT_VALUE[point];else if(board[point]===WHITE)score-=POINT_VALUE[point];}
+if(allPlaced(state)){let bm=movementStats(board,'b'),wm=movementStats(board,'w');score+=(bm.moves-wm.moves)*5+(wm.blocked-bm.blocked)*17;if(black===3)score+=22;if(white===3)score-=22;}
+else{score+=(state.whiteInHand-state.blackInHand)*(state.turn==='b'?1:-1);}
+score+=state.turn==='b'?3:-3;return score;
+}
+
+function pointDanger(board,point,color){let feature=lineFeatures(board,color),score=POINT_VALUE[point]*3;for(let mill of POINT_MILLS[point]){let own=0;for(let place of mill)if(board[place]===colorValue(color))own++;score+=own*18;}score+=feature.threats[point]*35;return score;}
+function moveOrderingScore(state,action){
+let color=state.turn,opponent=otherColor(color),score=POINT_VALUE[action.to]*12,board=boardAfterBase(state.board,action,color),beforeOpponent=lineFeatures(state.board,opponent),afterMine=lineFeatures(board,color);
+if(isInMill(board,action.to,color))score+=9000;if(beforeOpponent.threats[action.to])score+=beforeOpponent.threats[action.to]*2400;if(afterMine.forks)score+=afterMine.forks*700;
+if(action.remove>=0)score+=100000+pointDanger(board,action.remove,opponent)*12;if(action.from>=0&&isInMill(state.board,action.from,color))score+=180;return score;
+}
+
+let game=initialState(),selected=-1,pending=null;
+let myColor=null,vsCassie=false,freePlay=false,thinking=false,worker=null,aiTimer=null,aiGeneration=0,statusTimer=null;
+let gameCode=null,pollTimer=null,eventSource=null,lastNtfyId='',roomSession='',stateVersion=0,pollBusy=false,networkFailures=0,syncRetryTimer=null,joinWaitTimer=null,peerConnected=false;
+
+const PROTOCOL='cassie-nine-mens-morris-1',clientId=randomToken(12);
+const pointsEl=document.getElementById('points'),statusEl=document.getElementById('status'),connEl=document.getElementById('conn'),thinkEl=document.getElementById('thinkInfo');
+const opponentSelect=document.getElementById('opponentSelect'),difficultySelect=document.getElementById('difficultySelect'),sideSelect=document.getElementById('sideSelect');
+const codeInput=document.getElementById('codeInput'),createBtn=document.getElementById('createBtn'),joinBtn=document.getElementById('joinBtn'),copyBtn=document.getElementById('copyBtn');
+
+function randomToken(length){const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=new Uint8Array(length);crypto.getRandomValues(bytes);return Array.from(bytes,byte=>alphabet[byte%alphabet.length]).join('');}
+function topic(code){return PROTOCOL+'-'+code.toLowerCase();}
+function setStat(text,duration=3000){statusEl.textContent=text;statusEl.classList.add('show');if(statusTimer)clearTimeout(statusTimer);statusTimer=setTimeout(()=>{statusEl.classList.remove('show');statusTimer=null;},duration);}
+function hideStat(){if(statusTimer)clearTimeout(statusTimer);statusTimer=null;statusEl.classList.remove('show');statusEl.textContent='';}
+function clearSelection(){selected=-1;pending=null;}
+function canInteractSilently(){if(game.result)return false;if(freePlay)return true;if(vsCassie)return!!myColor&&game.turn===myColor;return!!myColor&&!!gameCode&&game.turn===myColor;}
+
+function render(){
+pointsEl.innerHTML='';let board=pending?pending.board:game.board,interactive=canInteractSilently()&&!thinking,targets=new Set(),captureTargets=new Set(pending?pending.eligible:[]);
+if(interactive&&!pending){let bases=generateBaseMoves(game);if(handCount(game,game.turn)>0)for(let move of bases)targets.add(move.to);else if(selected>=0)for(let move of bases)if(move.from===selected)targets.add(move.to);}
+for(let point=0;point<24;point++){
+let [x,y]=POINT_COORDS[point],button=document.createElement('button');button.type='button';button.className='point';button.style.left=(5+x*15)+'%';button.style.top=(5+y*15)+'%';button.dataset.point=point;
+let last=pending?pending.action:game.last;if(last){if(last.from===point&&last.from>=0)button.classList.add('lastFrom');if(last.to===point)button.classList.add('lastTo');if(!pending&&last.remove===point)button.classList.add('lastRemoved');}
+if(selected===point&&!pending)button.classList.add('selected');if(targets.has(point))button.classList.add('hint');if(captureTargets.has(point))button.classList.add('captureTarget');
+let node=document.createElement('span');node.className='node';button.appendChild(node);let marker=document.createElement('span');marker.className='marker';button.appendChild(marker);
+let piece=board[point];if(piece){let disc=document.createElement('span');disc.className='piece '+(piece===BLACK?'black':'white');button.appendChild(disc);}
+let description=POINT_NAMES[point]+(piece?' — '+colorName(pieceColor(piece)):' — empty');if(targets.has(point))description+=', legal destination';if(captureTargets.has(point))description+=', removable piece';button.setAttribute('aria-label',description);button.onclick=()=>onPoint(point);pointsEl.appendChild(button);
+}
+let black=countPieces(board,'b'),white=countPieces(board,'w'),blackHand=game.blackInHand,whiteHand=game.whiteInHand;if(pending&&pending.action.from<0){if(game.turn==='b')blackHand--;else whiteHand--;}document.getElementById('pieceInfo').textContent='Black '+black+(blackHand?' (+'+blackHand+')':'')+' · White '+white+(whiteHand?' (+'+whiteHand+')':'');
+document.getElementById('turnInfo').textContent=game.result?'Game over':colorName(game.turn);let phase=allPlaced(game)?(countPieces(game.board,game.turn)===3?'Flying':'Moving'):'Placing';if(pending)phase='Remove a piece';document.getElementById('phaseInfo').textContent=phase;
+let banner=document.getElementById('endBanner');if(game.result){document.getElementById('endTitle').textContent=game.result.title;document.getElementById('endReason').textContent=game.result.reason;banner.classList.add('show');}else banner.classList.remove('show');
+}
+
+function humanMayMove(){
+if(game.result){setStat(game.result.text);return false;}if(freePlay)return true;
+if(vsCassie){if(!myColor){setStat('Choose Cassie\'s difficulty and your colour.');return false;}if(game.turn!==myColor){setStat('Cassie is thinking.');return false;}return true;}
+if(!myColor||!gameCode){setStat('Create a game as Black, or enter a code and Join as White.');return false;}if(game.turn!==myColor){setStat('It is '+colorName(game.turn)+'\'s turn.');return false;}return true;
+}
+
+function beginBaseAction(move){
+let color=game.turn,board=boardAfterBase(game.board,move,color);if(isInMill(board,move.to,color)){let eligible=eligibleRemovals(board,otherColor(color));if(eligible.length){pending={action:{from:move.from,to:move.to,remove:-1},board,eligible};selected=-1;render();setStat('Mill formed — remove one '+colorName(otherColor(color))+' piece.',5000);return;}}
+commitAction({from:move.from,to:move.to,remove:-1},false);
+}
+
+function onPoint(point){
+if(thinking||!humanMayMove())return;
+if(pending){if(pending.eligible.includes(point)){let action={...pending.action,remove:point};commitAction(action,false);return;}if(pending.board[point]===colorValue(otherColor(game.turn))&&isInMill(pending.board,point,otherColor(game.turn)))setStat('That piece is protected by a mill; remove a red-ringed piece.');else setStat('Remove one of the red-ringed opposing pieces.');return;}
+let bases=generateBaseMoves(game),inHand=handCount(game,game.turn),piece=game.board[point];
+if(inHand>0){let move=bases.find(candidate=>candidate.to===point);if(move){beginBaseAction(move);return;}setStat('Place on an empty point marked with a green dot.');return;}
+if(selected>=0){let move=bases.find(candidate=>candidate.from===selected&&candidate.to===point);if(move){beginBaseAction(move);return;}}
+if(piece===colorValue(game.turn)){let choices=bases.filter(candidate=>candidate.from===point);if(choices.length){selected=point;render();setStat(countPieces(game.board,game.turn)===3?'Flying — choose any green point.':'Choose an adjacent green point.');}else setStat('That piece is blocked; choose another.');return;}
+if(piece===EMPTY)setStat(selected>=0?'Choose a green destination, or select another piece.':'Select one of your pieces first.');else setStat('That is your opponent\'s piece.');
+}
+
+function commitAction(action,remote){
+let legal=generateActions(game),move=legal.find(candidate=>moveKey(candidate)===moveKey(action));if(!move){clearSelection();render();setStat('That move is no longer legal.');return;}
+let mover=game.turn,description=actionText(move);game=applyGameAction(game,move);clearSelection();render();
+if(game.result)setStat(game.result.text,6000);else if(freePlay)setStat(description+' — '+colorName(game.turn)+' to move.');else if(vsCassie)setStat(game.turn===myColor?description+' — your turn.':description+' — Cassie is thinking.');else setStat(description+' — '+colorName(game.turn)+(game.turn===myColor?' to move.':' to move; waiting.'));
+if(vsCassie&&!game.result&&game.turn!==myColor)scheduleCassie(190);if(!remote&&!vsCassie&&!freePlay&&gameCode){stateVersion++;pushState();}
+}
+
+function validResult(result){return result===null||!!(result&&result.over===true&&(result.winner===null||['w','b'].includes(result.winner))&&typeof result.title==='string'&&typeof result.reason==='string'&&typeof result.text==='string');}
+function validGameState(state){
+if(!state||!Array.isArray(state.board)||state.board.length!==24||!state.board.every(piece=>piece===EMPTY||piece===BLACK||piece===WHITE))return false;
+if(!['w','b'].includes(state.turn)||!Number.isInteger(state.blackInHand)||state.blackInHand<0||state.blackInHand>9||!Number.isInteger(state.whiteInHand)||state.whiteInHand<0||state.whiteInHand>9)return false;
+if(countPieces(state.board,'b')+state.blackInHand>9||countPieces(state.board,'w')+state.whiteInHand>9||!Number.isInteger(state.noProgress)||state.noProgress<0||state.noProgress>100)return false;
+if(state.last!==null&&(!state.last||!Number.isInteger(state.last.from)||state.last.from< -1||state.last.from>23||!Number.isInteger(state.last.to)||state.last.to<0||state.last.to>23||!Number.isInteger(state.last.remove)||state.last.remove< -1||state.last.remove>23||!['w','b'].includes(state.last.mover)||typeof state.last.formedMill!=='boolean'))return false;
+if(!Array.isArray(state.history)||state.history.length>220||!state.history.every(item=>typeof item==='string'&&item.length<80)||!validResult(state.result))return false;return true;
+}
+function publicState(){return{board:game.board,turn:game.turn,blackInHand:game.blackInHand,whiteInHand:game.whiteInHand,last:game.last,result:game.result,noProgress:game.noProgress,history:game.history};}
+
+function stopNetwork(){if(pollTimer)clearInterval(pollTimer);if(eventSource)eventSource.close();if(syncRetryTimer)clearTimeout(syncRetryTimer);if(joinWaitTimer)clearTimeout(joinWaitTimer);pollTimer=null;eventSource=null;syncRetryTimer=null;joinWaitTimer=null;pollBusy=false;networkFailures=0;}
+function leaveRoom(){stopNetwork();cancelCassie();gameCode=null;roomSession='';lastNtfyId='';stateVersion=0;peerConnected=false;copyBtn.hidden=true;['createBtn','joinBtn'].forEach(id=>document.getElementById(id).classList.remove('sel'));}
+function parseNtfy(text){return text.split(/\r?\n/).filter(Boolean).map(line=>{try{return JSON.parse(line);}catch(error){return null;}}).filter(message=>message&&message.event==='message'&&typeof message.message==='string');}
+function parsePacket(message){try{let packet=JSON.parse(message.message);return packet&&packet.protocol===PROTOCOL?packet:null;}catch(error){return null;}}
+async function fetchMessages(code,since){let response=await fetch('https://ntfy.sh/'+topic(code)+'/json?poll=1&since='+encodeURIComponent(since||'all'),{cache:'no-store'});if(!response.ok)throw new Error('ntfy read failed: '+response.status);return parseNtfy(await response.text());}
+async function publishPacket(packet){if(!gameCode)throw new Error('No game code');let response=await fetch('https://ntfy.sh/'+topic(gameCode),{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({protocol:PROTOCOL,session:roomSession,sender:clientId,...packet})});if(!response.ok)throw new Error('ntfy publish failed: '+response.status);let receipt=await response.json();if(receipt&&receipt.id)lastNtfyId=receipt.id;networkFailures=0;return receipt;}
+async function pushState(){if(!gameCode||!roomSession)return;let version=stateVersion;try{await publishPacket({kind:'state',version,state:publicState()});if(syncRetryTimer)clearTimeout(syncRetryTimer);syncRetryTimer=null;connEl.textContent=(peerConnected?'Connected':'Synced')+' - Code '+gameCode;}catch(error){networkFailures++;connEl.textContent='Sync error - retrying';if(!syncRetryTimer)syncRetryTimer=setTimeout(()=>{syncRetryTimer=null;if(version===stateVersion)pushState();},2500);}}
+
+function cloneRemoteState(state){return{...state,board:state.board.slice(),last:state.last?{...state.last}:null,history:state.history.slice(),result:state.result?{...state.result}:null};}
+function applyRemoteState(packet){if(!Number.isInteger(packet.version)||packet.version<=stateVersion||!validGameState(packet.state))return;game=cloneRemoteState(packet.state);stateVersion=packet.version;peerConnected=true;clearSelection();render();setStat(game.result?game.result.text:(game.turn===myColor?'Your turn.':colorName(game.turn)+' to move; waiting.'));connEl.textContent='Connected - Code '+gameCode;}
+async function handleMessages(messages){for(let message of messages){lastNtfyId=message.id||lastNtfyId;let packet=parsePacket(message);if(!packet||packet.session!==roomSession||packet.sender===clientId)continue;if(packet.kind==='state')applyRemoteState(packet);if(packet.kind==='join'&&myColor==='b'){peerConnected=true;connEl.textContent='Connected - Code '+gameCode;setStat('White joined. Black moves first.');await publishPacket({kind:'ack'});await pushState();}if(packet.kind==='ack'&&myColor==='w'){peerConnected=true;if(joinWaitTimer)clearTimeout(joinWaitTimer);joinWaitTimer=null;connEl.textContent='Connected - Code '+gameCode;setStat(game.turn===myColor?'Your turn.':'Connected; waiting for Black.');}}}
+async function pollOnce(){if(pollBusy||!gameCode||!roomSession||vsCassie)return;pollBusy=true;try{let messages=await fetchMessages(gameCode,lastNtfyId||'all');await handleMessages(messages);networkFailures=0;}catch(error){networkFailures++;if(networkFailures>=3)connEl.textContent='Connection interrupted - retrying';}finally{pollBusy=false;}}
+function startPoll(){stopNetwork();if(typeof EventSource==='function'){let since=lastNtfyId||'all';eventSource=new EventSource('https://ntfy.sh/'+topic(gameCode)+'/sse?since='+encodeURIComponent(since));eventSource.onmessage=async event=>{try{let message=JSON.parse(event.data);await handleMessages([message]);networkFailures=0;}catch(error){}};eventSource.onopen=()=>{networkFailures=0;if(!peerConnected)connEl.textContent='Listening - Code '+gameCode;};eventSource.onerror=()=>{networkFailures++;if(networkFailures>=2)connEl.textContent='Connection interrupted - retrying';};return;}pollTimer=setInterval(pollOnce,4000);pollOnce();}
+
+function getWorker(){
+if(worker)return worker;
+let core=[otherColor,colorValue,pieceColor,cloneBoard,countPieces,handCount,allPlaced,isInMill,countMills,eligibleRemovals,generateBaseMoves,boardAfterBase,generateActions,moveKey,positionKey,applySearchAction,lineFeatures,movementStats,evaluateBlack,pointDanger,moveOrderingScore].map(fn=>fn.toString()).join('\n');
+let code=`'use strict';const EMPTY=${EMPTY},BLACK=${BLACK},WHITE=${WHITE},WIN=${WIN};const ADJ=${JSON.stringify(ADJ)},MILLS=${JSON.stringify(MILLS)},POINT_MILLS=${JSON.stringify(POINT_MILLS)},POINT_VALUE=${JSON.stringify(POINT_VALUE)};
+${core}
+let startTime=0,timeLimit=0,timedOut=false,nodes=0,table=new Map();
+function timeExpired(){nodes++;if((nodes&511)===0&&Date.now()-startTime>=timeLimit)timedOut=true;return timedOut;}
+function terminalScore(state,ply){if(!allPlaced(state))return null;let count=countPieces(state.board,state.turn);if(count<3)return state.turn==='b'?-WIN+ply:WIN-ply;if(!generateBaseMoves(state,state.turn).length)return state.turn==='b'?-WIN+ply:WIN-ply;if((state.noProgress||0)>=100)return 0;return null;}
+function searchKey(state){return positionKey(state)+'|'+(state.noProgress||0);}
+function orderedActions(state,actions,preferred){return actions.map(action=>({action,score:(moveKey(action)===preferred?2000000:0)+moveOrderingScore(state,action)})).sort((a,b)=>b.score-a.score).map(item=>item.action);}
+function quiesce(state,alpha,beta,ply,qDepth,path){if(timeExpired())return 0;let terminal=terminalScore(state,ply);if(terminal!==null)return terminal;let stand=evaluateBlack(state),maximising=state.turn==='b';if(qDepth<=0)return stand;if(maximising){if(stand>=beta)return stand;alpha=Math.max(alpha,stand);}else{if(stand<=alpha)return stand;beta=Math.min(beta,stand);}let actions=generateActions(state).filter(action=>action.remove>=0);if(!actions.length)return stand;actions=orderedActions(state,actions,'');let best=stand;for(let action of actions){let child=applySearchAction(state,action),key=positionKey(child),score;if(path.has(key))score=0;else{path.add(key);score=quiesce(child,alpha,beta,ply+1,qDepth-1,path);path.delete(key);}if(timedOut)return 0;if(maximising){best=Math.max(best,score);alpha=Math.max(alpha,best);}else{best=Math.min(best,score);beta=Math.min(beta,best);}if(alpha>=beta)break;}return best;}
+function alphaBeta(state,depth,alpha,beta,ply,path){
+if(timeExpired())return 0;let terminal=terminalScore(state,ply);if(terminal!==null)return terminal;if(depth<=0)return quiesce(state,alpha,beta,ply,2,path);
+let key=searchKey(state),entry=table.get(key),originalAlpha=alpha,originalBeta=beta,preferred=entry&&entry.best||'';
+if(entry&&entry.depth>=depth){if(entry.flag==='exact')return entry.score;if(entry.flag==='lower')alpha=Math.max(alpha,entry.score);else if(entry.flag==='upper')beta=Math.min(beta,entry.score);if(alpha>=beta)return entry.score;}
+let actions=orderedActions(state,generateActions(state),preferred),best=state.turn==='b'?-Infinity:Infinity,bestKey='';if(!actions.length)return terminalScore(state,ply)||0;
+if(state.turn==='b'){for(let action of actions){let child=applySearchAction(state,action),childKey=positionKey(child),score;if(path.has(childKey))score=0;else{path.add(childKey);score=alphaBeta(child,depth-1,alpha,beta,ply+1,path);path.delete(childKey);}if(timedOut)return 0;if(score>best){best=score;bestKey=moveKey(action);}alpha=Math.max(alpha,best);if(alpha>=beta)break;}}
+else{for(let action of actions){let child=applySearchAction(state,action),childKey=positionKey(child),score;if(path.has(childKey))score=0;else{path.add(childKey);score=alphaBeta(child,depth-1,alpha,beta,ply+1,path);path.delete(childKey);}if(timedOut)return 0;if(score<best){best=score;bestKey=moveKey(action);}beta=Math.min(beta,best);if(alpha>=beta)break;}}
+let flag=best<=originalAlpha?'upper':best>=originalBeta?'lower':'exact';if(table.size<280000)table.set(key,{depth,score:best,flag,best:bestKey});return best;
+}
+function rootSearch(state,depth,preferred){let actions=orderedActions(state,generateActions(state),preferred),scores=[],alpha=-WIN*2,beta=WIN*2,best=null,bestScore=state.turn==='b'?-Infinity:Infinity,path=new Set([positionKey(state)]);for(let action of actions){if(Date.now()-startTime>=timeLimit){timedOut=true;break;}let child=applySearchAction(state,action),childKey=positionKey(child),score;if(path.has(childKey))score=0;else{path.add(childKey);score=alphaBeta(child,depth-1,alpha,beta,1,path);path.delete(childKey);}if(timedOut)break;scores.push({action,score});if((state.turn==='b'&&score>bestScore)||(state.turn==='w'&&score<bestScore)){bestScore=score;best=action;}if(state.turn==='b')alpha=Math.max(alpha,bestScore);else beta=Math.min(beta,bestScore);}return{best,bestScore,scores};}
+self.onmessage=function(event){let {state,targetDepth,limit,difficulty}=event.data;startTime=Date.now();timeLimit=limit;timedOut=false;nodes=0;table=new Map();let legal=generateActions(state),best=legal[0]||null,bestScore=state.turn==='b'?-Infinity:Infinity,completedDepth=0,preferred='',finalScores=[];for(let depth=1;depth<=targetDepth&&legal.length;depth++){timedOut=false;let result=rootSearch(state,depth,preferred);if(timedOut||!result.best)break;best=result.best;bestScore=result.bestScore;finalScores=result.scores;completedDepth=depth;preferred=moveKey(best);self.postMessage({progress:true,depth,nodes,score:bestScore,best});if(Math.abs(bestScore)>=WIN-depth)break;}
+if(difficulty==='Easy'&&finalScores.length>1){finalScores.sort((a,b)=>state.turn==='b'?b.score-a.score:a.score-b.score);let pool=finalScores.slice(0,Math.min(6,finalScores.length)),weights=[34,24,17,12,8,5].slice(0,pool.length),total=weights.reduce((a,b)=>a+b,0),roll=Math.random()*total;for(let i=0;i<pool.length;i++){roll-=weights[i];if(roll<=0){best=pool[i].action;bestScore=pool[i].score;break;}}}
+self.postMessage({progress:false,best,score:bestScore,depth:completedDepth,nodes});};`;
+let blob=new Blob([code],{type:'application/javascript'});worker=new Worker(URL.createObjectURL(blob));return worker;
+}
+
+function cassieColor(){return myColor==='b'?'w':'b';}
+function isCassieTurn(){return!!(vsCassie&&!game.result&&myColor&&game.turn===cassieColor());}
+function cancelCassie(){if(aiTimer)clearTimeout(aiTimer);aiTimer=null;aiGeneration++;if(worker){worker.terminate();worker=null;}thinking=false;thinkEl.textContent='';}
+function scheduleCassie(delay=150){if(!isCassieTurn()||thinking)return;if(aiTimer)clearTimeout(aiTimer);let generation=aiGeneration;aiTimer=setTimeout(()=>{aiTimer=null;if(generation===aiGeneration)cassieMove();},delay);}
+function applyCassieMove(candidate,expectedTurn,generation){thinking=false;thinkEl.textContent='';if(generation!==aiGeneration||!isCassieTurn()||game.turn!==expectedTurn||!candidate)return;let legal=generateActions(game),move=legal.find(item=>moveKey(item)===moveKey(candidate));if(move)commitAction(move,false);}
+
+function cassieMove(){
+if(!isCassieTurn()||thinking)return;let expectedTurn=game.turn,generation=aiGeneration,mode=difficultySelect.value||'Easy',settings=mode==='Hard'?{depth:8,limit:7000}:mode==='Medium'?{depth:5,limit:1900}:{depth:3,limit:480};
+thinking=true;thinkEl.textContent='Cassie is thinking...';let w=getWorker();w.onmessage=event=>{if(generation!==aiGeneration)return;if(event.data.progress){if(isCassieTurn()&&game.turn===expectedTurn)thinkEl.textContent='Cassie: depth '+event.data.depth+' · '+event.data.nodes.toLocaleString()+' positions';return;}applyCassieMove(event.data.best,expectedTurn,generation);};
+w.onerror=()=>{if(generation!==aiGeneration)return;thinking=false;thinkEl.textContent='';w.terminate();if(worker===w)worker=null;setStat('Cassie stopped unexpectedly. Tap Reset to try again.');};w.postMessage({state:publicState(),targetDepth:settings.depth,limit:settings.limit,difficulty:mode});
+}
+
+function setRole(color,isCassie){myColor=color;document.getElementById('myRole').textContent=colorName(color)+(isCassie?' vs Cassie':'');if(isCassie)sideSelect.value=color;render();}
+function selectConnectionButton(id){['createBtn','joinBtn'].forEach(buttonId=>document.getElementById(buttonId).classList.toggle('sel',buttonId===id));}
+function updateSetupAvailability(){let cassie=opponentSelect.value==='cassie';difficultySelect.disabled=!cassie;sideSelect.disabled=!cassie;if(!cassie){difficultySelect.value='';sideSelect.value='';}}
+function setHumanMenu(){freePlay=false;opponentSelect.value='human';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();document.getElementById('modeInfo').textContent='Human';}
+function chooseHumanSetup(showMessage=true){leaveRoom();vsCassie=false;setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';game=initialState();clearSelection();render();connEl.textContent='Offline';if(showMessage)setStat('Human game: create as Black, or join as White with a code.');}
+function chooseFreePlaySetup(){leaveRoom();vsCassie=false;freePlay=true;opponentSelect.value='free';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();myColor=null;document.getElementById('myRole').textContent='Both sides';codeInput.value='';document.getElementById('modeInfo').textContent='Free Play';game=initialState();clearSelection();render();connEl.textContent='Same-phone game';setStat('Free Play — Black places first. Move either side in turn.');}
+function chooseCassieSetup(){leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';document.getElementById('modeInfo').textContent='Cassie';game=initialState();clearSelection();render();connEl.textContent='Offline Cassie game';setStat('Choose Cassie\'s difficulty and your colour.');}
+function startCassie(mode,color){leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';updateSetupAvailability();difficultySelect.value=mode;sideSelect.value=color;document.getElementById('modeInfo').textContent='Cassie - '+mode;game=initialState();clearSelection();setRole(color,true);codeInput.value='';setStat(mode+' Cassie — '+(color==='b'?'you are Black; place first.':'you are White; Cassie opens as Black.'));connEl.textContent='Offline Cassie game';if(game.turn!==myColor)scheduleCassie(220);}
+function refreshCassieGame(){if(opponentSelect.value!=='cassie')return;let mode=difficultySelect.value,color=sideSelect.value;if(mode&&color){startCassie(mode,color);return;}leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';updateSetupAvailability();difficultySelect.value=mode;sideSelect.value=color;myColor=null;document.getElementById('myRole').textContent='-';document.getElementById('modeInfo').textContent=mode?'Cassie - '+mode:'Cassie';game=initialState();clearSelection();render();connEl.textContent='Offline Cassie game';setStat(mode?'Choose whether to play Black or White against Cassie.':'Choose Cassie\'s difficulty.');}
+
+opponentSelect.onchange=()=>opponentSelect.value==='cassie'?chooseCassieSetup():opponentSelect.value==='free'?chooseFreePlaySetup():chooseHumanSetup();
+difficultySelect.onchange=refreshCassieGame;sideSelect.onchange=refreshCassieGame;
+codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,'').slice(0,4);});
+
+createBtn.onclick=async()=>{
+leaveRoom();selectConnectionButton('createBtn');vsCassie=false;setHumanMenu();game=initialState();clearSelection();setRole('b',false);gameCode=randomToken(4);roomSession=randomToken(16);stateVersion=0;codeInput.value=gameCode;copyBtn.hidden=false;createBtn.disabled=true;joinBtn.disabled=true;setStat('Creating game '+gameCode+'...');connEl.textContent='Connecting...';
+try{await publishPacket({kind:'state',version:stateVersion,state:publicState()});setStat('Game '+gameCode+' created. Share the code; Black places first.');connEl.textContent='Waiting for White - Code '+gameCode;startPoll();}catch(error){leaveRoom();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';game=initialState();render();setStat('Could not create the game. Check your internet connection and try again.');connEl.textContent='Connection failed';}finally{createBtn.disabled=false;joinBtn.disabled=false;}
+};
+
+joinBtn.onclick=async()=>{
+let code=codeInput.value.trim().toUpperCase();if(!/^[A-HJ-NP-Z2-9]{4}$/.test(code)){setStat('Enter the four-character game code.');return;}
+leaveRoom();selectConnectionButton('joinBtn');vsCassie=false;setHumanMenu();game=initialState();clearSelection();setRole('w',false);gameCode=code;createBtn.disabled=true;joinBtn.disabled=true;setStat('Looking for game '+code+'...');connEl.textContent='Joining...';
+try{let messages=await fetchMessages(code,'all'),found=null;for(let i=messages.length-1;i>=0;i--){let packet=parsePacket(messages[i]);if(packet&&packet.kind==='state'&&validGameState(packet.state)){found={message:messages[i],packet};break;}}if(!found)throw new Error('room-not-found');roomSession=found.packet.session;game=cloneRemoteState(found.packet.state);stateVersion=Number.isInteger(found.packet.version)?found.packet.version:0;lastNtfyId=messages[messages.length-1].id||found.message.id;render();setStat('Game found. Waiting for Black to confirm...');connEl.textContent='Found '+code+' - contacting Black';await publishPacket({kind:'join'});startPoll();joinWaitTimer=setTimeout(()=>{if(!peerConnected&&gameCode===code){connEl.textContent='Black is not responding';setStat('The game was found, but Black may have closed it. Ask Black to create a new code.');}},9000);}catch(error){leaveRoom();setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';render();setStat(error.message==='room-not-found'?'No active game was found for that code. Check it with Black.':'Could not join. Check your internet connection and try again.');connEl.textContent='Connection failed';}finally{createBtn.disabled=false;joinBtn.disabled=false;}
+};
+
+copyBtn.onclick=async()=>{if(!gameCode)return;try{await navigator.clipboard.writeText(gameCode);copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent='Copy',1200);}catch(error){codeInput.focus();codeInput.select();setStat('Code '+gameCode+' selected — copy it and send it to White.');}};
+function resetAllSettings(){hideStat();leaveRoom();vsCassie=false;freePlay=false;setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';copyBtn.textContent='Copy';createBtn.disabled=false;joinBtn.disabled=false;game=initialState();clearSelection();render();connEl.textContent='Offline';setStat('Reset complete — choose Human, Cassie or Free Play.');}
+
+document.getElementById('resetBtn').onclick=resetAllSettings;
+document.getElementById('howBtn').onclick=()=>{document.getElementById('rulesModal').style.display='flex';};
+document.getElementById('closeRules').onclick=()=>{document.getElementById('rulesModal').style.display='none';};
+document.getElementById('rulesModal').onclick=event=>{if(event.target.id==='rulesModal')event.currentTarget.style.display='none';};
+window.addEventListener('beforeunload',()=>{stopNetwork();cancelCassie();});
+
+setHumanMenu();render();
+</script>
+</body>
+</html>

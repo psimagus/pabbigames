@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Chess with Cassie</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#1a1a2e;color:#eee;font-family:system-ui;display:flex;flex-direction:column;align-items:center;padding:5px}
+h1{font-size:1.75rem;line-height:1.05;margin:2px 0 4px;letter-spacing:3px}
+#status{position:fixed;z-index:100;top:6px;left:50%;transform:translate(-50%,-12px);width:min(92vw,480px);padding:8px 10px;background:#16213e;border:1px solid #334155;border-radius:9px;text-align:center;line-height:1.25;font-size:.82rem;box-shadow:0 4px 18px #0008;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .18s,transform .18s,visibility .18s}
+#status.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+.setupControls{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,.72fr);gap:5px;width:96vw;max-width:520px;margin:3px 0}
+.setupControls select:last-child{grid-column:1/-1}
+select{width:100%;height:34px;padding:5px 27px 5px 9px;border:1px solid #355071;border-radius:8px;background:#0f3460;color:#fff;font:600 .8rem system-ui;cursor:pointer}
+select:disabled{opacity:.45;cursor:not-allowed}
+.controls{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;align-items:center;margin:3px 0;width:96vw;max-width:520px}
+button{min-height:32px;background:#0f3460;color:#fff;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.78rem}
+button.sel{background:#eab308;color:#000;font-weight:800}
+button.big{font-weight:800}
+button.infoBtn{background:#334155}
+button:disabled{opacity:.55;cursor:wait}
+input{height:32px;padding:5px 7px;border-radius:8px;border:1px solid #444;background:#0f0f23;color:#fff;width:84px;text-align:center;text-transform:uppercase;font-size:.78rem;font-weight:700}
+#board{display:grid;grid-template-columns:repeat(8,1fr);background:#3a3a5c;border:4px solid #3a3a5c;border-radius:6px;width:96vw;max-width:520px;aspect-ratio:1/1;overflow:hidden;touch-action:manipulation}
+.square{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1;cursor:pointer;user-select:none;-webkit-user-select:none}
+.square.light{background:#e8dcc0}
+.square.dark{background:#8d6a43}
+.square.selected{background:#6ec6ff!important}
+.square.last{box-shadow:inset 0 0 0 4px #facc15aa}
+.square.check{background:#ef4444!important}
+.square.hint::after{content:'';position:absolute;width:19%;height:19%;border-radius:50%;background:#65a30d;opacity:.8}
+.square.captureHint::after{content:'';position:absolute;inset:7%;border:4px solid #65a30d;border-radius:50%;opacity:.85}
+.piece{position:relative;z-index:2;font-family:'Segoe UI Symbol','Arial Unicode MS',serif;font-size:clamp(2rem,10.5vw,4rem);line-height:1;transform:translateY(-1%)}
+.piece.white{color:#fff;text-shadow:0 1px 1px #000,1px 0 1px #000,0 -1px 1px #000,-1px 0 1px #000}
+.piece.black{color:#17120e;text-shadow:0 1px 1px #d8c6a6}
+.coord{position:absolute;z-index:3;font-size:clamp(.48rem,1.8vw,.66rem);font-weight:800;opacity:.68;pointer-events:none}
+.coord.file{right:3px;bottom:1px}
+.coord.rank{left:3px;top:1px}
+.square.light .coord{color:#704b2d}.square.dark .coord{color:#f0dfbd}
+#info{font-size:.8rem;margin:5px 5px 2px;text-align:center;line-height:1.35}
+#rulesModal,#promotionModal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:110;padding:12px}
+#rulesBox{background:#f8f1e0;color:#1a1a1a;border-radius:14px;max-width:520px;width:96vw;max-height:90vh;overflow:auto;padding:18px 16px;line-height:1.45}
+#rulesBox h2{margin-top:0}#rulesBox h3{margin:14px 0 6px}
+#closeRules{margin-top:12px;width:100%;background:#0f3460;color:#fff;padding:10px;border-radius:9px;border:none;font-weight:700}
+#promotionBox{background:#f8f1e0;color:#1a1a1a;border-radius:14px;padding:16px;text-align:center;width:min(92vw,360px)}
+#promotionBox h3{margin:0 0 12px}
+#promotionChoices{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+#promotionChoices button{background:#e8dcc0;color:#17120e;border:1px solid #8d6a43;font-family:'Segoe UI Symbol','Arial Unicode MS',serif;font-size:2.5rem;min-height:64px;padding:4px}
+@media(min-width:440px){.setupControls{grid-template-columns:1fr .72fr 1.55fr}.setupControls select:last-child{grid-column:auto}}
+</style>
+</head>
+<body>
+
+<h1>CHESS</h1>
+<div id="status" role="status" aria-live="polite"></div>
+
+<div class="setupControls">
+<select id="opponentSelect" aria-label="Choose opponent"><option value="human" selected>Versus Human</option><option value="cassie">Versus Cassie</option><option value="free">Free Play (same phone)</option></select>
+<select id="difficultySelect" aria-label="Choose Cassie difficulty" disabled><option value="" selected disabled hidden>Difficulty</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>
+<select id="sideSelect" aria-label="Choose your colour against Cassie" disabled><option value="" selected disabled hidden>Choose colour</option><option value="w">Play White against Cassie</option><option value="b">Play Black against Cassie</option></select>
+</div>
+
+<div class="controls"><button id="createBtn" class="big">Create Game</button><input id="codeInput" placeholder="GAME CODE" maxlength="4" aria-label="Four-character game code"><button id="joinBtn" class="big">Join Game</button><button id="copyBtn" hidden>Copy</button><button id="resetBtn">Reset</button><button id="howBtn" class="infoBtn">? How to Play</button></div>
+
+<div id="board" aria-label="Chess board"></div>
+<div id="info">You: <b><span id="myRole">-</span></b> | Turn: <b><span id="turnInfo">White</span></b> | <span id="modeInfo">Human</span><br><span id="conn" style="color:#22c55e">Offline</span><br><span id="thinkInfo" style="color:#facc15"></span></div>
+
+<div id="promotionModal"><div id="promotionBox"><h3>Promote your pawn</h3><div id="promotionChoices"><button data-piece="q" aria-label="Queen">♕</button><button data-piece="r" aria-label="Rook">♖</button><button data-piece="b" aria-label="Bishop">♗</button><button data-piece="n" aria-label="Knight">♘</button></div></div></div>
+
+<div id="rulesModal"><div id="rulesBox">
+<h2>Chess</h2>
+<p>Chess is a two-player strategy game. White moves first. Each player tries to checkmate the opposing King: attack it so that no legal move can save it.</p>
+
+<h3>How the pieces move</h3>
+<p><b>King:</b> one square in any direction. It may never move into check.<br><b>Queen:</b> any distance vertically, horizontally or diagonally.<br><b>Rook:</b> any distance vertically or horizontally.<br><b>Bishop:</b> any distance diagonally.<br><b>Knight:</b> in an L-shape—two squares one way and one across. Knights may jump over pieces.<br><b>Pawn:</b> one square forward, or two from its starting square if unobstructed; it captures one square diagonally forward.</p>
+
+<h3>Check and checkmate</h3>
+<p>If your King is attacked, it is in <b>check</b> and you must remove the threat. If no legal move can do so, it is <b>checkmate</b> and the game is over. If a player has no legal move but is not in check, the game is a draw by <b>stalemate</b>.</p>
+
+<h3>Special moves</h3>
+<p><b>Castling:</b> move the King two squares towards an unmoved Rook; the Rook crosses to the other side. The squares between must be empty, and the King may not castle out of, through or into check.<br><b>En passant:</b> immediately after an opposing pawn advances two squares past your pawn's capture square, your pawn may capture it as though it had advanced only one.<br><b>Promotion:</b> a pawn reaching the farthest rank becomes a Queen, Rook, Bishop or Knight.</p>
+
+<h3>Draws</h3>
+<p>The program recognises stalemate, threefold repetition, the fifty-move rule and positions with insufficient mating material.</p>
+
+<h3>Playing here</h3>
+<p>In a human game, the creator plays White and shares the four-character code; the player who joins is Black. Choose <b>Free Play</b> for two people sharing one phone, or to explore both sides yourself; White moves first and the board remains in a fixed orientation. Against Cassie, choose a difficulty and then choose your colour. Reset leaves the current game and restores all settings.</p>
+
+<button id="closeRules">Close</button>
+</div></div>
+
+<script>
+'use strict';
+
+const FILES='abcdefgh';
+const GLYPHS={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+const VALUES={p:100,n:320,b:335,r:500,q:900,k:0};
+const MATE=100000;
+
+const PST={
+p:[
+0,0,0,0,0,0,0,0,
+50,50,50,50,50,50,50,50,
+10,10,20,30,30,20,10,10,
+5,5,10,25,25,10,5,5,
+0,0,0,20,20,0,0,0,
+5,-5,-10,0,0,-10,-5,5,
+5,10,10,-20,-20,10,10,5,
+0,0,0,0,0,0,0,0],
+n:[
+-50,-40,-30,-30,-30,-30,-40,-50,
+-40,-20,0,5,5,0,-20,-40,
+-30,5,10,15,15,10,5,-30,
+-30,0,15,20,20,15,0,-30,
+-30,5,15,20,20,15,5,-30,
+-30,0,10,15,15,10,0,-30,
+-40,-20,0,0,0,0,-20,-40,
+-50,-40,-30,-30,-30,-30,-40,-50],
+b:[
+-20,-10,-10,-10,-10,-10,-10,-20,
+-10,5,0,0,0,0,5,-10,
+-10,10,10,10,10,10,10,-10,
+-10,0,10,10,10,10,0,-10,
+-10,5,5,10,10,5,5,-10,
+-10,0,5,10,10,5,0,-10,
+-10,0,0,0,0,0,0,-10,
+-20,-10,-10,-10,-10,-10,-10,-20],
+r:[
+0,0,0,5,5,0,0,0,
+5,10,10,10,10,10,10,5,
+-5,0,0,0,0,0,0,-5,
+-5,0,0,0,0,0,0,-5,
+-5,0,0,0,0,0,0,-5,
+-5,0,0,0,0,0,0,-5,
+-5,0,0,0,0,0,0,-5,
+0,0,0,5,5,0,0,0],
+q:[
+-20,-10,-10,-5,-5,-10,-10,-20,
+-10,0,5,0,0,0,0,-10,
+-10,5,5,5,5,5,0,-10,
+0,0,5,5,5,5,0,-5,
+-5,0,5,5,5,5,0,-5,
+-10,0,5,5,5,5,0,-10,
+-10,0,0,0,0,0,0,-10,
+-20,-10,-10,-5,-5,-10,-10,-20],
+k:[
+-30,-40,-40,-50,-50,-40,-40,-30,
+-30,-40,-40,-50,-50,-40,-40,-30,
+-30,-40,-40,-50,-50,-40,-40,-30,
+-30,-40,-40,-50,-50,-40,-40,-30,
+-20,-30,-30,-40,-40,-30,-30,-20,
+-10,-20,-20,-20,-20,-20,-20,-10,
+20,20,0,0,0,0,20,20,
+20,30,10,0,0,10,30,20]
+};
+
+const KING_END_TABLE=[
+-50,-30,-30,-30,-30,-30,-30,-50,
+-30,-10,0,0,0,0,-10,-30,
+-30,0,20,30,30,20,0,-30,
+-30,0,30,40,40,30,0,-30,
+-30,0,30,40,40,30,0,-30,
+-30,0,20,30,30,20,0,-30,
+-30,-10,0,0,0,0,-10,-30,
+-50,-30,-30,-30,-30,-30,-30,-50];
+
+function rowOf(square){return Math.floor(square/8);}
+function colOf(square){return square%8;}
+function squareOf(row,col){return row*8+col;}
+function onBoard(row,col){return row>=0&&row<8&&col>=0&&col<8;}
+function otherColor(color){return color==='w'?'b':'w';}
+function pieceColor(piece){return piece?(piece===piece.toUpperCase()?'w':'b'):null;}
+function squareName(square){return FILES[colOf(square)]+(8-rowOf(square));}
+function parseSquare(name){if(!/^[a-h][1-8]$/.test(name))return-1;return (8-Number(name[1]))*8+FILES.indexOf(name[0]);}
+function moveKey(move){return move.from+'-'+move.to+'-'+(move.promotion||'')+'-'+(move.castle||'')+'-'+(move.enPassant?'e':'');}
+
+function positionKey(state){
+let ep='-';
+if(state.ep>=0){let row=rowOf(state.ep)+(state.turn==='w'?1:-1),col=colOf(state.ep),pawn=state.turn==='w'?'P':'p';for(let dc of[-1,1])if(onBoard(row,col+dc)&&state.board[squareOf(row,col+dc)]===pawn){ep=state.ep;break;}}
+return state.board.map(piece=>piece||'.').join('')+'|'+state.turn+'|'+(state.castling||'-')+'|'+ep;
+}
+
+function positionHash(state){
+let text=positionKey(state),hash=2166136261;
+for(let i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
+return (hash>>>0).toString(36);
+}
+
+function initialState(){
+let board=Array(64).fill('');
+let black='rnbqkbnr',white='RNBQKBNR';
+for(let col=0;col<8;col++){board[col]=black[col];board[8+col]='p';board[48+col]='P';board[56+col]=white[col];}
+let state={board,turn:'w',castling:'KQkq',ep:-1,halfmove:0,fullmove:1,history:[],last:null,result:null};
+state.history=[positionHash(state)];
+return state;
+}
+
+function stateFromFEN(fen){
+let parts=fen.trim().split(/\s+/),rows=parts[0].split('/'),board=[];
+if(rows.length!==8)throw new Error('Invalid FEN');
+for(let text of rows){for(let char of text){if(/[1-8]/.test(char))for(let i=0;i<Number(char);i++)board.push('');else board.push(char);}}
+if(board.length!==64)throw new Error('Invalid FEN board');
+let state={board,turn:parts[1]||'w',castling:parts[2]==='-'?'':parts[2],ep:parts[3]&&parts[3]!=='-'?parseSquare(parts[3]):-1,halfmove:Number(parts[4]||0),fullmove:Number(parts[5]||1),history:[],last:null,result:null};
+state.history=[positionHash(state)];
+return state;
+}
+
+function findKing(state,color){let king=color==='w'?'K':'k';return state.board.indexOf(king);}
+
+function isSquareAttacked(state,square,byColor){
+let row=rowOf(square),col=colOf(square),board=state.board;
+let pawnRow=row+(byColor==='w'?1:-1),pawn=byColor==='w'?'P':'p';
+for(let dc of[-1,1])if(onBoard(pawnRow,col+dc)&&board[squareOf(pawnRow,col+dc)]===pawn)return true;
+let knight=byColor==='w'?'N':'n';
+for(let[dr,dc]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]])if(onBoard(row+dr,col+dc)&&board[squareOf(row+dr,col+dc)]===knight)return true;
+let king=byColor==='w'?'K':'k';
+for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&onBoard(row+dr,col+dc)&&board[squareOf(row+dr,col+dc)]===king)return true;
+for(let[dr,dc]of[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+let r=row+dr,c=col+dc;
+while(onBoard(r,c)){
+let piece=board[squareOf(r,c)];
+if(piece){
+if(pieceColor(piece)===byColor){let type=piece.toLowerCase();if(type==='q'||((dr===0||dc===0)&&type==='r')||(dr!==0&&dc!==0&&type==='b'))return true;}
+break;
+}
+r+=dr;c+=dc;
+}
+}
+return false;
+}
+
+function inCheck(state,color){let king=findKing(state,color);return king<0||isSquareAttacked(state,king,otherColor(color));}
+
+function addPawnMove(moves,from,to,promotionRow,extra={}){
+if(rowOf(to)===promotionRow)for(let promotion of['q','r','b','n'])moves.push({from,to,promotion,...extra});
+else moves.push({from,to,...extra});
+}
+
+function pseudoMoves(state,color=state.turn,capturesOnly=false){
+let moves=[],board=state.board;
+for(let from=0;from<64;from++){
+let piece=board[from];if(!piece||pieceColor(piece)!==color)continue;
+let type=piece.toLowerCase(),row=rowOf(from),col=colOf(from);
+if(type==='p'){
+let direction=color==='w'?-1:1,startRow=color==='w'?6:1,promotionRow=color==='w'?0:7;
+let oneRow=row+direction;
+if(onBoard(oneRow,col)&&!board[squareOf(oneRow,col)]){
+let one=squareOf(oneRow,col);
+if(!capturesOnly||oneRow===promotionRow)addPawnMove(moves,from,one,promotionRow);
+if(!capturesOnly&&row===startRow){let two=squareOf(row+direction*2,col);if(!board[two])moves.push({from,to:two,doublePawn:true});}
+}
+for(let dc of[-1,1]){
+let targetRow=row+direction,targetCol=col+dc;if(!onBoard(targetRow,targetCol))continue;
+let to=squareOf(targetRow,targetCol),target=board[to];
+if(target&&pieceColor(target)!==color&&target.toLowerCase()!=='k')addPawnMove(moves,from,to,promotionRow);
+else if(to===state.ep&&board[squareOf(row,targetCol)]===(color==='w'?'p':'P'))moves.push({from,to,enPassant:true});
+}
+continue;
+}
+if(type==='n'){
+for(let[dr,dc]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]){
+let r=row+dr,c=col+dc;if(!onBoard(r,c))continue;let to=squareOf(r,c),target=board[to];
+if(!target){if(!capturesOnly)moves.push({from,to});}else if(pieceColor(target)!==color&&target.toLowerCase()!=='k')moves.push({from,to});
+}
+continue;
+}
+if(type==='b'||type==='r'||type==='q'){
+let directions=type==='b'?[[1,1],[1,-1],[-1,1],[-1,-1]]:type==='r'?[[1,0],[-1,0],[0,1],[0,-1]]:[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+for(let[dr,dc]of directions){let r=row+dr,c=col+dc;while(onBoard(r,c)){let to=squareOf(r,c),target=board[to];if(!target){if(!capturesOnly)moves.push({from,to});}else{if(pieceColor(target)!==color&&target.toLowerCase()!=='k')moves.push({from,to});break;}r+=dr;c+=dc;}}
+continue;
+}
+if(type==='k'){
+for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if(dr||dc){let r=row+dr,c=col+dc;if(!onBoard(r,c))continue;let to=squareOf(r,c),target=board[to];if(!target){if(!capturesOnly)moves.push({from,to});}else if(pieceColor(target)!==color&&target.toLowerCase()!=='k')moves.push({from,to});}
+if(capturesOnly)continue;
+let enemy=otherColor(color);
+if(color==='w'&&from===60&&!inCheck(state,'w')){
+if(state.castling.includes('K')&&board[63]==='R'&&!board[61]&&!board[62]&&!isSquareAttacked(state,61,enemy)&&!isSquareAttacked(state,62,enemy))moves.push({from,to:62,castle:'K'});
+if(state.castling.includes('Q')&&board[56]==='R'&&!board[59]&&!board[58]&&!board[57]&&!isSquareAttacked(state,59,enemy)&&!isSquareAttacked(state,58,enemy))moves.push({from,to:58,castle:'Q'});
+}
+if(color==='b'&&from===4&&!inCheck(state,'b')){
+if(state.castling.includes('k')&&board[7]==='r'&&!board[5]&&!board[6]&&!isSquareAttacked(state,5,enemy)&&!isSquareAttacked(state,6,enemy))moves.push({from,to:6,castle:'K'});
+if(state.castling.includes('q')&&board[0]==='r'&&!board[3]&&!board[2]&&!board[1]&&!isSquareAttacked(state,3,enemy)&&!isSquareAttacked(state,2,enemy))moves.push({from,to:2,castle:'Q'});
+}
+}
+}
+return moves;
+}
+
+function applyMove(state,move,recordHistory=false){
+let board=state.board.slice(),moving=board[move.from],captured=board[move.to],oldCastling=state.castling;
+board[move.from]='';
+if(move.enPassant){let capturedSquare=move.to+(pieceColor(moving)==='w'?8:-8);captured=board[capturedSquare];board[capturedSquare]='';}
+board[move.to]=move.promotion?(pieceColor(moving)==='w'?move.promotion.toUpperCase():move.promotion.toLowerCase()):moving;
+if(move.castle){let row=pieceColor(moving)==='w'?7:0;if(move.to===squareOf(row,6)){board[squareOf(row,5)]=board[squareOf(row,7)];board[squareOf(row,7)]='';}else{board[squareOf(row,3)]=board[squareOf(row,0)];board[squareOf(row,0)]='';}}
+let castling=state.castling;
+if(moving==='K')castling=castling.replace(/[KQ]/g,'');
+if(moving==='k')castling=castling.replace(/[kq]/g,'');
+if(moving==='R'&&move.from===63)castling=castling.replace('K','');
+if(moving==='R'&&move.from===56)castling=castling.replace('Q','');
+if(moving==='r'&&move.from===7)castling=castling.replace('k','');
+if(moving==='r'&&move.from===0)castling=castling.replace('q','');
+if(captured==='R'&&move.to===63)castling=castling.replace('K','');
+if(captured==='R'&&move.to===56)castling=castling.replace('Q','');
+if(captured==='r'&&move.to===7)castling=castling.replace('k','');
+if(captured==='r'&&move.to===0)castling=castling.replace('q','');
+let ep=-1;
+if(moving&&moving.toLowerCase()==='p'&&Math.abs(move.to-move.from)===16)ep=(move.to+move.from)/2;
+let pawnMove=moving&&moving.toLowerCase()==='p';
+let next={board,turn:otherColor(state.turn),castling,ep,halfmove:pawnMove||captured?0:state.halfmove+1,fullmove:state.fullmove+(state.turn==='b'?1:0),history:state.history||[],last:{...move,piece:moving,captured:captured||''},result:null};
+if(recordHistory){let hash=positionHash(next),irreversible=pawnMove||!!captured||oldCastling!==castling;next.history=irreversible?[hash]:[...(state.history||[]),hash];}
+return next;
+}
+
+function generateLegalMoves(state,color=state.turn,capturesOnly=false){
+let moves=pseudoMoves(state,color,capturesOnly),legal=[];
+for(let move of moves){let next=applyMove(state,move,false);if(!inCheck(next,color))legal.push(move);}
+return legal;
+}
+
+function insufficientMaterial(state){
+let material=[];
+for(let square=0;square<64;square++){let piece=state.board[square];if(piece&&piece.toLowerCase()!=='k')material.push({piece:piece.toLowerCase(),square});}
+if(!material.length)return true;
+if(material.length===1&&['b','n'].includes(material[0].piece))return true;
+if(material.every(item=>item.piece==='b')){let colors=new Set(material.map(item=>(rowOf(item.square)+colOf(item.square))%2));return colors.size===1;}
+return false;
+}
+
+function repetitionCount(state){let current=positionHash(state),count=0;for(let hash of state.history||[])if(hash===current)count++;return count;}
+
+function gameOutcome(state,includeRepetition=true){
+let legal=generateLegalMoves(state,state.turn,false);
+if(!legal.length){
+if(inCheck(state,state.turn)){let winner=otherColor(state.turn);return{over:true,winner,reason:'checkmate',text:(winner==='w'?'White':'Black')+' wins by checkmate!'};}
+return{over:true,winner:null,reason:'stalemate',text:'Draw by stalemate.'};
+}
+if(state.halfmove>=100)return{over:true,winner:null,reason:'fifty-move',text:'Draw by the fifty-move rule.'};
+if(includeRepetition&&repetitionCount(state)>=3)return{over:true,winner:null,reason:'repetition',text:'Draw by threefold repetition.'};
+if(insufficientMaterial(state))return{over:true,winner:null,reason:'material',text:'Draw by insufficient material.'};
+return{over:false,winner:null,reason:null,text:''};
+}
+
+function capturedPiece(state,move){if(move.enPassant)return state.turn==='w'?'p':'P';return state.board[move.to]||'';}
+
+function moveOrderingScore(state,move,preferredKey=''){
+if(moveKey(move)===preferredKey)return 1000000;
+let moving=state.board[move.from],captured=capturedPiece(state,move),score=0;
+if(captured)score+=10000+VALUES[captured.toLowerCase()]*10-VALUES[moving.toLowerCase()];
+if(move.promotion)score+=8000+VALUES[move.promotion];
+if(move.castle)score+=400;
+let type=moving.toLowerCase(),fromIndex=pieceColor(moving)==='w'?move.from:(move.from^56),toIndex=pieceColor(moving)==='w'?move.to:(move.to^56);
+if(PST[type])score+=PST[type][toIndex]-PST[type][fromIndex];
+return score;
+}
+
+function evaluateWhite(state){
+let score=0,nonPawnMaterial=0,whiteBishops=0,blackBishops=0;
+let whitePawnFiles=Array(8).fill(0),blackPawnFiles=Array(8).fill(0),whitePawns=[],blackPawns=[],whiteRooks=[],blackRooks=[];
+for(let piece of state.board)if(piece&&!['p','k'].includes(piece.toLowerCase()))nonPawnMaterial+=VALUES[piece.toLowerCase()];
+for(let square=0;square<64;square++){
+let piece=state.board[square];if(!piece)continue;
+let color=pieceColor(piece),type=piece.toLowerCase(),sign=color==='w'?1:-1,index=color==='w'?square:(square^56);
+let table=type==='k'&&nonPawnMaterial<2200?KING_END_TABLE:PST[type];
+score+=sign*(VALUES[type]+table[index]);
+if(type==='b'){if(color==='w')whiteBishops++;else blackBishops++;}
+if(type==='p'){let file=colOf(square);if(color==='w'){whitePawnFiles[file]++;whitePawns.push(square);}else{blackPawnFiles[file]++;blackPawns.push(square);}}
+if(type==='r'){if(color==='w')whiteRooks.push(square);else blackRooks.push(square);}
+}
+if(whiteBishops>=2)score+=28;if(blackBishops>=2)score-=28;
+for(let file=0;file<8;file++){
+if(whitePawnFiles[file]>1)score-=(whitePawnFiles[file]-1)*14;
+if(blackPawnFiles[file]>1)score+=(blackPawnFiles[file]-1)*14;
+}
+for(let square of whitePawns){let file=colOf(square),row=rowOf(square);if(!(whitePawnFiles[file-1]||whitePawnFiles[file+1]))score-=11;let passed=true;for(let enemy of blackPawns)if(Math.abs(colOf(enemy)-file)<=1&&rowOf(enemy)<row){passed=false;break;}if(passed)score+=(6-row)*15;}
+for(let square of blackPawns){let file=colOf(square),row=rowOf(square);if(!(blackPawnFiles[file-1]||blackPawnFiles[file+1]))score+=11;let passed=true;for(let enemy of whitePawns)if(Math.abs(colOf(enemy)-file)<=1&&rowOf(enemy)>row){passed=false;break;}if(passed)score-=(row-1)*15;}
+for(let square of whiteRooks){let file=colOf(square);if(!whitePawnFiles[file])score+=blackPawnFiles[file]?10:18;}
+for(let square of blackRooks){let file=colOf(square);if(!blackPawnFiles[file])score-=whitePawnFiles[file]?10:18;}
+let whiteKing=findKing(state,'w'),blackKing=findKing(state,'b');
+if(nonPawnMaterial>=2200){
+if(whiteKing===62||whiteKing===58)score+=32;if(blackKing===6||blackKing===2)score-=32;
+if(whiteKing>=0){let r=rowOf(whiteKing)-1,c=colOf(whiteKing);for(let dc=-1;dc<=1;dc++)if(onBoard(r,c+dc)&&state.board[squareOf(r,c+dc)]==='P')score+=8;}
+if(blackKing>=0){let r=rowOf(blackKing)+1,c=colOf(blackKing);for(let dc=-1;dc<=1;dc++)if(onBoard(r,c+dc)&&state.board[squareOf(r,c+dc)]==='p')score-=8;}
+}
+score+=state.turn==='w'?8:-8;
+return score;
+}
+
+function moveText(state,move){
+if(move.castle)return move.to>move.from?'O-O':'O-O-O';
+let piece=state.board[move.from],capture=!!capturedPiece(state,move),name=piece.toLowerCase()==='p'?'':piece.toUpperCase();
+return name+squareName(move.from)+(capture?'×':'–')+squareName(move.to)+(move.promotion?'='+move.promotion.toUpperCase():'');
+}
+
+let game=initialState(),selected=-1,selectedMoves=[],pendingPromotion=null;
+let myColor=null,vsCassie=false,freePlay=false,thinking=false,worker=null,aiTimer=null,aiGeneration=0,statusTimer=null;
+let gameCode=null,pollTimer=null,eventSource=null,lastNtfyId='',roomSession='',stateVersion=0,pollBusy=false,networkFailures=0,syncRetryTimer=null,joinWaitTimer=null,peerConnected=false;
+
+const PROTOCOL='cassie-chess-1',clientId=randomToken(12);
+const boardEl=document.getElementById('board'),statusEl=document.getElementById('status'),connEl=document.getElementById('conn'),thinkEl=document.getElementById('thinkInfo');
+const opponentSelect=document.getElementById('opponentSelect'),difficultySelect=document.getElementById('difficultySelect'),sideSelect=document.getElementById('sideSelect');
+const codeInput=document.getElementById('codeInput'),createBtn=document.getElementById('createBtn'),joinBtn=document.getElementById('joinBtn'),copyBtn=document.getElementById('copyBtn');
+
+function randomToken(length){const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=new Uint8Array(length);crypto.getRandomValues(bytes);return Array.from(bytes,byte=>alphabet[byte%alphabet.length]).join('');}
+function colorName(color){return color==='w'?'White':'Black';}
+function topic(code){return PROTOCOL+'-'+code.toLowerCase();}
+
+function setStat(text,duration=3000){statusEl.textContent=text;statusEl.classList.add('show');if(statusTimer)clearTimeout(statusTimer);statusTimer=setTimeout(()=>{statusEl.classList.remove('show');statusTimer=null;},duration);}
+function hideStat(){if(statusTimer)clearTimeout(statusTimer);statusTimer=null;statusEl.classList.remove('show');statusEl.textContent='';}
+
+function render(){
+boardEl.innerHTML='';
+let flipped=myColor==='b',checkedSquare=!game.result&&inCheck(game,game.turn)?findKing(game,game.turn):-1;
+let targets=new Map();for(let move of selectedMoves){if(!targets.has(move.to))targets.set(move.to,[]);targets.get(move.to).push(move);}
+for(let displayRow=0;displayRow<8;displayRow++)for(let displayCol=0;displayCol<8;displayCol++){
+let row=flipped?7-displayRow:displayRow,col=flipped?7-displayCol:displayCol,square=squareOf(row,col),piece=game.board[square];
+let cell=document.createElement('div');cell.className='square '+((row+col)%2?'dark':'light');cell.dataset.square=square;
+if(square===selected)cell.classList.add('selected');
+if(game.last&&(square===game.last.from||square===game.last.to))cell.classList.add('last');
+if(square===checkedSquare)cell.classList.add('check');
+if(targets.has(square))cell.classList.add(piece||targets.get(square).some(move=>move.enPassant)?'captureHint':'hint');
+if(piece){let pieceEl=document.createElement('span');pieceEl.className='piece '+(pieceColor(piece)==='w'?'white':'black');pieceEl.textContent=GLYPHS[piece];cell.appendChild(pieceEl);}
+if(displayRow===7){let label=document.createElement('span');label.className='coord file';label.textContent=FILES[col];cell.appendChild(label);}
+if(displayCol===0){let label=document.createElement('span');label.className='coord rank';label.textContent=8-row;cell.appendChild(label);}
+cell.setAttribute('aria-label',(piece?colorName(pieceColor(piece))+' '+({p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'}[piece.toLowerCase()])+' on ':'')+squareName(square));
+cell.onclick=()=>onSquare(square);boardEl.appendChild(cell);
+}
+let turnText=game.result?'Game over':colorName(game.turn)+(inCheck(game,game.turn)?' - Check':'');
+document.getElementById('turnInfo').textContent=turnText;
+}
+
+function humanMayMove(){
+if(game.result){setStat(game.result.text);return false;}
+if(freePlay)return true;
+if(vsCassie){if(!myColor){setStat('Choose Cassie\'s difficulty and your colour.');return false;}if(game.turn!==myColor){setStat('Cassie is thinking.');return false;}return true;}
+if(!myColor||!gameCode){setStat('Create a game as White, or enter a code and Join as Black.');return false;}
+if(game.turn!==myColor){setStat('It is '+colorName(game.turn)+'\'s turn.');return false;}
+return true;
+}
+
+function onSquare(square){
+if(thinking||pendingPromotion||!humanMayMove())return;
+let piece=game.board[square];
+if(selected>=0){
+let candidates=selectedMoves.filter(move=>move.to===square);
+if(candidates.length){
+if(candidates.some(move=>move.promotion)){showPromotion(candidates);return;}
+commitMove(candidates[0],false);return;
+}
+}
+if(piece&&pieceColor(piece)===game.turn){
+if(selected===square){selected=-1;selectedMoves=[];}else{selected=square;selectedMoves=generateLegalMoves(game,game.turn,false).filter(move=>move.from===square);}
+render();return;
+}
+if(piece)setStat('You cannot move the opponent\'s pieces.');
+selected=-1;selectedMoves=[];render();
+}
+
+function showPromotion(moves){
+pendingPromotion=moves;let white=game.turn==='w';
+for(let button of document.querySelectorAll('#promotionChoices button'))button.textContent=GLYPHS[white?button.dataset.piece.toUpperCase():button.dataset.piece];
+document.getElementById('promotionModal').style.display='flex';
+}
+
+function closePromotion(){pendingPromotion=null;document.getElementById('promotionModal').style.display='none';}
+
+for(let button of document.querySelectorAll('#promotionChoices button'))button.onclick=()=>{if(!pendingPromotion)return;let move=pendingPromotion.find(candidate=>candidate.promotion===button.dataset.piece);closePromotion();if(move)commitMove(move,false);};
+
+function commitMove(move,remote){
+let notation=moveText(game,move),movingColor=game.turn;
+game=applyMove(game,move,true);let outcome=gameOutcome(game,true);if(outcome.over)game.result=outcome;
+selected=-1;selectedMoves=[];closePromotion();render();
+if(game.result)setStat(game.result.text,5000);
+else if(inCheck(game,game.turn))setStat(notation+' - '+colorName(game.turn)+' is in check.');
+else if(freePlay)setStat(notation+' - '+colorName(game.turn)+' to move.');
+else if(vsCassie)setStat(game.turn===myColor?notation+' - your turn.':notation+' - Cassie is thinking.');
+else setStat(notation+' - '+colorName(game.turn)+(game.turn===myColor?' to move.':' to move; waiting.'));
+if(vsCassie&&!game.result&&game.turn!==myColor)scheduleCassie(180);
+if(!remote&&!vsCassie&&gameCode){stateVersion++;pushState();}
+return movingColor;
+}
+
+function validGameState(state){
+if(!state||!Array.isArray(state.board)||state.board.length!==64||!state.board.every(piece=>typeof piece==='string'&&/^$|^[prnbqkPRNBQK]$/.test(piece)))return false;
+if(state.board.filter(piece=>piece==='K').length!==1||state.board.filter(piece=>piece==='k').length!==1)return false;
+if(!['w','b'].includes(state.turn)||typeof state.castling!=='string'||!/^(?:K?Q?k?q?)$/.test(state.castling))return false;
+if(!Number.isInteger(state.ep)||state.ep< -1||state.ep>63||!Number.isInteger(state.halfmove)||state.halfmove<0||!Number.isInteger(state.fullmove)||state.fullmove<1)return false;
+if(!Array.isArray(state.history)||!state.history.every(hash=>typeof hash==='string'&&hash.length<=12))return false;
+return true;
+}
+
+function publicState(){return{board:game.board,turn:game.turn,castling:game.castling,ep:game.ep,halfmove:game.halfmove,fullmove:game.fullmove,history:game.history,last:game.last,result:game.result};}
+
+function stopNetwork(){if(pollTimer)clearInterval(pollTimer);if(eventSource)eventSource.close();if(syncRetryTimer)clearTimeout(syncRetryTimer);if(joinWaitTimer)clearTimeout(joinWaitTimer);pollTimer=null;eventSource=null;syncRetryTimer=null;joinWaitTimer=null;pollBusy=false;networkFailures=0;}
+
+function leaveRoom(){stopNetwork();cancelCassie();gameCode=null;roomSession='';lastNtfyId='';stateVersion=0;peerConnected=false;copyBtn.hidden=true;['createBtn','joinBtn'].forEach(id=>document.getElementById(id).classList.remove('sel'));}
+
+function parseNtfy(text){return text.split(/\r?\n/).filter(Boolean).map(line=>{try{return JSON.parse(line);}catch(error){return null;}}).filter(message=>message&&message.event==='message'&&typeof message.message==='string');}
+function parsePacket(message){try{let packet=JSON.parse(message.message);return packet&&packet.protocol===PROTOCOL?packet:null;}catch(error){return null;}}
+
+async function fetchMessages(code,since){let response=await fetch('https://ntfy.sh/'+topic(code)+'/json?poll=1&since='+encodeURIComponent(since||'all'),{cache:'no-store'});if(!response.ok)throw new Error('ntfy read failed: '+response.status);return parseNtfy(await response.text());}
+
+async function publishPacket(packet){if(!gameCode)throw new Error('No game code');let response=await fetch('https://ntfy.sh/'+topic(gameCode),{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({protocol:PROTOCOL,session:roomSession,sender:clientId,...packet})});if(!response.ok)throw new Error('ntfy publish failed: '+response.status);let receipt=await response.json();if(receipt&&receipt.id)lastNtfyId=receipt.id;networkFailures=0;return receipt;}
+
+async function pushState(){if(!gameCode||!roomSession)return;let version=stateVersion;try{await publishPacket({kind:'state',version,state:publicState()});if(syncRetryTimer)clearTimeout(syncRetryTimer);syncRetryTimer=null;connEl.textContent=(peerConnected?'Connected':'Synced')+' - Code '+gameCode;}catch(error){networkFailures++;connEl.textContent='Sync error - retrying';if(!syncRetryTimer)syncRetryTimer=setTimeout(()=>{syncRetryTimer=null;if(version===stateVersion)pushState();},2500);}}
+
+function applyRemoteState(packet){
+if(!Number.isInteger(packet.version)||packet.version<=stateVersion||!validGameState(packet.state))return;
+game={...packet.state,board:packet.state.board.slice(),history:packet.state.history.slice()};stateVersion=packet.version;selected=-1;selectedMoves=[];peerConnected=true;render();
+setStat(game.result?game.result.text:(game.turn===myColor?'Your turn.':colorName(game.turn)+' to move; waiting.'));connEl.textContent='Connected - Code '+gameCode;
+}
+
+async function handleMessages(messages){for(let message of messages){lastNtfyId=message.id||lastNtfyId;let packet=parsePacket(message);if(!packet||packet.session!==roomSession||packet.sender===clientId)continue;if(packet.kind==='state')applyRemoteState(packet);if(packet.kind==='join'&&myColor==='w'){peerConnected=true;connEl.textContent='Connected - Code '+gameCode;setStat('Black joined. White moves first.');await publishPacket({kind:'ack'});await pushState();}if(packet.kind==='ack'&&myColor==='b'){peerConnected=true;if(joinWaitTimer)clearTimeout(joinWaitTimer);joinWaitTimer=null;connEl.textContent='Connected - Code '+gameCode;setStat(game.turn===myColor?'Your turn.':'Connected; waiting for White.');}}}
+
+async function pollOnce(){if(pollBusy||!gameCode||!roomSession||vsCassie)return;pollBusy=true;try{let messages=await fetchMessages(gameCode,lastNtfyId||'all');await handleMessages(messages);networkFailures=0;}catch(error){networkFailures++;if(networkFailures>=3)connEl.textContent='Connection interrupted - retrying';}finally{pollBusy=false;}}
+
+function startPoll(){stopNetwork();if(typeof EventSource==='function'){let since=lastNtfyId||'all';eventSource=new EventSource('https://ntfy.sh/'+topic(gameCode)+'/sse?since='+encodeURIComponent(since));eventSource.onmessage=async event=>{try{let message=JSON.parse(event.data);await handleMessages([message]);networkFailures=0;}catch(error){}};eventSource.onopen=()=>{networkFailures=0;if(!peerConnected)connEl.textContent='Listening - Code '+gameCode;};eventSource.onerror=()=>{networkFailures++;if(networkFailures>=2)connEl.textContent='Connection interrupted - retrying';};return;}pollTimer=setInterval(pollOnce,4000);pollOnce();}
+
+function getWorker(){
+if(worker)return worker;
+let core=[rowOf,colOf,squareOf,onBoard,otherColor,pieceColor,positionKey,findKing,isSquareAttacked,inCheck,addPawnMove,pseudoMoves,applyMove,generateLegalMoves,insufficientMaterial,capturedPiece,moveKey,moveOrderingScore,evaluateWhite].map(fn=>fn.toString()).join('\n');
+let code=`const VALUES=${JSON.stringify(VALUES)},PST=${JSON.stringify(PST)},KING_END_TABLE=${JSON.stringify(KING_END_TABLE)},MATE=${MATE};
+${core}
+let timedOut=false,nodes=0,startTime=0,timeLimit=0,table=new Map(),killers=[],historyHeuristic=new Map();
+function timeExpired(){nodes++;if((nodes&511)===0&&Date.now()-startTime>=timeLimit)timedOut=true;return timedOut;}
+function relativeEval(state){let value=evaluateWhite(state);return state.turn==='w'?value:-value;}
+function searchOrder(state,move,preferred,ply){let score=moveOrderingScore(state,move,preferred),key=moveKey(move),pair=killers[ply]||[];if(key===pair[0])score+=7000;else if(key===pair[1])score+=6000;score+=historyHeuristic.get(state.board[move.from]+move.to)||0;return score;}
+function quiescence(state,alpha,beta,ply,depthLeft){
+if(timeExpired())return 0;if(insufficientMaterial(state))return 0;
+let checked=inCheck(state,state.turn),stand=relativeEval(state),moves;
+if(state.halfmove>=100){if(checked&&!generateLegalMoves(state,state.turn,false).length)return-MATE+ply;return 0;}
+if(!checked){if(stand>=beta)return beta;if(stand>alpha)alpha=stand;if(depthLeft<=0)return alpha;moves=generateLegalMoves(state,state.turn,true);if(!moves.length)return alpha;}
+else{moves=generateLegalMoves(state,state.turn,false);if(!moves.length)return-MATE+ply;if(depthLeft<=-2)return stand;}
+moves.sort((a,b)=>moveOrderingScore(state,b)-moveOrderingScore(state,a));
+for(let move of moves){let score=-quiescence(applyMove(state,move,false),-beta,-alpha,ply+1,depthLeft-1);if(timedOut)return 0;if(score>=beta)return beta;if(score>alpha)alpha=score;}
+return alpha;
+}
+function negamax(state,depth,alpha,beta,ply){
+if(timeExpired())return 0;if(insufficientMaterial(state))return 0;
+if(depth<=0)return quiescence(state,alpha,beta,ply,4);
+let key=positionKey(state)+'|'+state.halfmove,entry=table.get(key),originalAlpha=alpha,preferred='';
+if(entry&&entry.depth>=depth){preferred=entry.best||'';if(entry.flag==='exact')return entry.score;if(entry.flag==='lower')alpha=Math.max(alpha,entry.score);else if(entry.flag==='upper')beta=Math.min(beta,entry.score);if(alpha>=beta)return entry.score;}else if(entry)preferred=entry.best||'';
+let moves=generateLegalMoves(state,state.turn,false);
+if(!moves.length)return inCheck(state,state.turn)?-MATE+ply:0;
+if(state.halfmove>=100)return 0;
+moves.sort((a,b)=>searchOrder(state,b,preferred,ply)-searchOrder(state,a,preferred,ply));
+let best=-Infinity,bestKey='',moveNumber=0;
+for(let move of moves){
+let child=applyMove(state,move,false),score;
+if(moveNumber===0)score=-negamax(child,depth-1,-beta,-alpha,ply+1);
+else{score=-negamax(child,depth-1,-alpha-1,-alpha,ply+1);if(score>alpha&&score<beta)score=-negamax(child,depth-1,-beta,-alpha,ply+1);}
+moveNumber++;if(timedOut)return 0;if(score>best){best=score;bestKey=moveKey(move);}if(score>alpha)alpha=score;
+if(alpha>=beta){if(!capturedPiece(state,move)&&!move.promotion){let keyMove=moveKey(move),pair=killers[ply]||[];if(pair[0]!==keyMove)killers[ply]=[keyMove,pair[0]||''];let historyKey=state.board[move.from]+move.to;historyHeuristic.set(historyKey,(historyHeuristic.get(historyKey)||0)+depth*depth);}break;}
+}
+let flag=best<=originalAlpha?'upper':best>=beta?'lower':'exact';table.set(key,{depth,score:best,flag,best:bestKey});return best;
+}
+self.onmessage=function(event){
+let {state,targetDepth,limit}=event.data;startTime=Date.now();timeLimit=limit;timedOut=false;nodes=0;table=new Map();killers=[];historyHeuristic=new Map();
+let moves=generateLegalMoves(state,state.turn,false),best=moves[0]||null,bestScore=-Infinity,completedDepth=0,preferred='';
+for(let depth=1;depth<=targetDepth&&moves.length;depth++){
+timedOut=false;let currentBest=null,currentScore=-Infinity;
+moves.sort((a,b)=>searchOrder(state,b,preferred,0)-searchOrder(state,a,preferred,0));
+for(let move of moves){if(Date.now()-startTime>=timeLimit){timedOut=true;break;}let score=-negamax(applyMove(state,move,false),depth-1,-MATE,MATE,1);if(timedOut)break;if(score>currentScore){currentScore=score;currentBest=move;}}
+if(timedOut||!currentBest)break;best=currentBest;bestScore=currentScore;completedDepth=depth;preferred=moveKey(best);self.postMessage({progress:true,depth,nodes,score:bestScore,best});if(Math.abs(bestScore)>MATE-100)break;
+}
+self.postMessage({progress:false,best,score:bestScore,depth:completedDepth,nodes});
+};`;
+let blob=new Blob([code],{type:'application/javascript'});worker=new Worker(URL.createObjectURL(blob));return worker;
+}
+
+function cassieColor(){return myColor==='w'?'b':'w';}
+function isCassieTurn(){return !!(vsCassie&&!game.result&&myColor&&game.turn===cassieColor());}
+
+function cancelCassie(){if(aiTimer)clearTimeout(aiTimer);aiTimer=null;aiGeneration++;if(worker){worker.terminate();worker=null;}thinking=false;thinkEl.textContent='';}
+
+function scheduleCassie(delay=150){if(!isCassieTurn()||thinking)return;if(aiTimer)clearTimeout(aiTimer);let generation=aiGeneration;aiTimer=setTimeout(()=>{aiTimer=null;if(generation===aiGeneration)cassieMove();},delay);}
+
+function easyMove(){
+let moves=generateLegalMoves(game,game.turn,false),color=game.turn,scored=[];
+for(let move of moves){let next=applyMove(game,move,false),reply=generateLegalMoves(next,next.turn,false),score=(color==='w'?evaluateWhite(next):-evaluateWhite(next));if(!reply.length&&inCheck(next,next.turn))score+=MATE;score+=moveOrderingScore(game,move)*.015+(Math.random()-.5)*150;scored.push({move,score});}
+scored.sort((a,b)=>b.score-a.score);let pool=scored.slice(0,Math.min(6,scored.length));if(!pool.length)return null;let weights=[36,24,16,11,8,5].slice(0,pool.length),total=weights.reduce((a,b)=>a+b,0),roll=Math.random()*total;for(let i=0;i<pool.length;i++){roll-=weights[i];if(roll<=0)return pool[i].move;}return pool[0].move;
+}
+
+function applyCassieMove(candidate,expectedTurn,generation){
+thinking=false;thinkEl.textContent='';if(generation!==aiGeneration||!isCassieTurn()||game.turn!==expectedTurn||!candidate)return;
+let legal=generateLegalMoves(game,game.turn,false),move=legal.find(item=>moveKey(item)===moveKey(candidate));if(move)commitMove(move,false);
+}
+
+function cassieMove(){
+if(!isCassieTurn()||thinking)return;let expectedTurn=game.turn,generation=aiGeneration,mode=difficultySelect.value||'Easy';
+if(mode==='Easy'){thinking=true;thinkEl.textContent='Cassie is thinking...';setTimeout(()=>applyCassieMove(easyMove(),expectedTurn,generation),120);return;}
+thinking=true;thinkEl.textContent='Cassie is thinking...';let targetDepth=mode==='Hard'?6:4,limit=mode==='Hard'?9000:3000,w=getWorker();
+w.onmessage=event=>{if(generation!==aiGeneration)return;if(event.data.progress){if(isCassieTurn()&&game.turn===expectedTurn)thinkEl.textContent='Cassie: depth '+event.data.depth+' · '+event.data.nodes.toLocaleString()+' positions';return;}applyCassieMove(event.data.best,expectedTurn,generation);};
+w.onerror=()=>{if(generation!==aiGeneration)return;thinking=false;thinkEl.textContent='';w.terminate();if(worker===w)worker=null;setStat('Cassie stopped unexpectedly. Tap Reset to try again.');};
+w.postMessage({state:publicState(),targetDepth,limit});
+}
+
+function setRole(color,isCassie){myColor=color;document.getElementById('myRole').textContent=colorName(color)+(isCassie?' vs Cassie':'');if(isCassie)sideSelect.value=color;render();}
+function selectConnectionButton(id){['createBtn','joinBtn'].forEach(buttonId=>document.getElementById(buttonId).classList.toggle('sel',buttonId===id));}
+function updateSetupAvailability(){let cassie=opponentSelect.value==='cassie';difficultySelect.disabled=!cassie;sideSelect.disabled=!cassie;if(!cassie){difficultySelect.value='';sideSelect.value='';}}
+function clearCassieRole(clearSide=true){myColor=null;document.getElementById('myRole').textContent='-';if(clearSide)sideSelect.value='';render();}
+function setHumanMenu(){freePlay=false;opponentSelect.value='human';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();document.getElementById('modeInfo').textContent='Human';}
+
+function chooseHumanSetup(showMessage=true){leaveRoom();vsCassie=false;setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';game=initialState();selected=-1;selectedMoves=[];render();connEl.textContent='Offline';if(showMessage)setStat('Human game: create as White, or join as Black with a code.');}
+
+function chooseFreePlaySetup(){leaveRoom();vsCassie=false;freePlay=true;opponentSelect.value='free';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();myColor=null;document.getElementById('myRole').textContent='Both sides';codeInput.value='';document.getElementById('modeInfo').textContent='Free Play';game=initialState();selected=-1;selectedMoves=[];closePromotion();render();connEl.textContent='Same-phone game';setStat('Free Play - White moves first. Move either side in turn.');}
+
+function chooseCassieSetup(){leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';difficultySelect.value='';sideSelect.value='';updateSetupAvailability();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';document.getElementById('modeInfo').textContent='Cassie';game=initialState();selected=-1;selectedMoves=[];render();connEl.textContent='Offline Cassie game';setStat('Choose Cassie\'s difficulty and your colour.');}
+
+function startCassie(mode,color){leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';updateSetupAvailability();difficultySelect.value=mode;sideSelect.value=color;document.getElementById('modeInfo').textContent='Cassie - '+mode;game=initialState();selected=-1;selectedMoves=[];setRole(color,true);codeInput.value='';setStat(mode+' Cassie - '+(color==='w'?'you are White; your move.':'you are Black; Cassie opens as White.'));connEl.textContent='Offline Cassie game';if(game.turn!==myColor)scheduleCassie(220);}
+
+function refreshCassieGame(){if(opponentSelect.value!=='cassie')return;let mode=difficultySelect.value,color=sideSelect.value;if(mode&&color){startCassie(mode,color);return;}leaveRoom();vsCassie=true;freePlay=false;opponentSelect.value='cassie';updateSetupAvailability();difficultySelect.value=mode;sideSelect.value=color;myColor=null;document.getElementById('myRole').textContent='-';document.getElementById('modeInfo').textContent=mode?'Cassie - '+mode:'Cassie';game=initialState();selected=-1;selectedMoves=[];render();connEl.textContent='Offline Cassie game';setStat(mode?'Choose whether to play White or Black against Cassie.':'Choose Cassie\'s difficulty.');}
+
+opponentSelect.onchange=()=>opponentSelect.value==='cassie'?chooseCassieSetup():opponentSelect.value==='free'?chooseFreePlaySetup():chooseHumanSetup();
+difficultySelect.onchange=refreshCassieGame;
+sideSelect.onchange=refreshCassieGame;
+
+codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g,'').slice(0,4);});
+
+createBtn.onclick=async()=>{
+leaveRoom();selectConnectionButton('createBtn');vsCassie=false;setHumanMenu();game=initialState();setRole('w',false);gameCode=randomToken(4);roomSession=randomToken(16);stateVersion=0;codeInput.value=gameCode;copyBtn.hidden=false;createBtn.disabled=true;joinBtn.disabled=true;setStat('Creating game '+gameCode+'...');connEl.textContent='Connecting...';
+try{await publishPacket({kind:'state',version:stateVersion,state:publicState()});setStat('Game '+gameCode+' created. Share the code; White moves first.');connEl.textContent='Waiting for Black - Code '+gameCode;startPoll();}catch(error){leaveRoom();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';game=initialState();render();setStat('Could not create the game. Check your internet connection and try again.');connEl.textContent='Connection failed';}finally{createBtn.disabled=false;joinBtn.disabled=false;}
+};
+
+joinBtn.onclick=async()=>{
+let code=codeInput.value.trim().toUpperCase();if(!/^[A-HJ-NP-Z2-9]{4}$/.test(code)){setStat('Enter the four-character game code.');return;}
+leaveRoom();selectConnectionButton('joinBtn');vsCassie=false;setHumanMenu();game=initialState();setRole('b',false);gameCode=code;createBtn.disabled=true;joinBtn.disabled=true;setStat('Looking for game '+code+'...');connEl.textContent='Joining...';
+try{let messages=await fetchMessages(code,'all'),found=null;for(let i=messages.length-1;i>=0;i--){let packet=parsePacket(messages[i]);if(packet&&packet.kind==='state'&&validGameState(packet.state)){found={message:messages[i],packet};break;}}if(!found)throw new Error('room-not-found');roomSession=found.packet.session;game={...found.packet.state,board:found.packet.state.board.slice(),history:found.packet.state.history.slice()};stateVersion=Number.isInteger(found.packet.version)?found.packet.version:0;lastNtfyId=messages[messages.length-1].id||found.message.id;render();setStat('Game found. Waiting for White to confirm...');connEl.textContent='Found '+code+' - contacting White';await publishPacket({kind:'join'});startPoll();joinWaitTimer=setTimeout(()=>{if(!peerConnected&&gameCode===code){connEl.textContent='White is not responding';setStat('The game was found, but White may have closed it. Ask White to create a new code.');}},9000);}catch(error){leaveRoom();setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';render();setStat(error.message==='room-not-found'?'No active game was found for that code. Check it with White.':'Could not join. Check your internet connection and try again.');connEl.textContent='Connection failed';}finally{createBtn.disabled=false;joinBtn.disabled=false;}
+};
+
+copyBtn.onclick=async()=>{if(!gameCode)return;try{await navigator.clipboard.writeText(gameCode);copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent='Copy',1200);}catch(error){codeInput.focus();codeInput.select();setStat('Code '+gameCode+' selected - copy it and send it to Black.');}};
+
+function resetAllSettings(){hideStat();leaveRoom();vsCassie=false;freePlay=false;setHumanMenu();myColor=null;document.getElementById('myRole').textContent='-';codeInput.value='';copyBtn.textContent='Copy';createBtn.disabled=false;joinBtn.disabled=false;game=initialState();selected=-1;selectedMoves=[];closePromotion();render();connEl.textContent='Offline';setStat('Reset complete - choose Human, Cassie or Free Play.');}
+
+document.getElementById('resetBtn').onclick=resetAllSettings;
+document.getElementById('howBtn').onclick=()=>{document.getElementById('rulesModal').style.display='flex';};
+document.getElementById('closeRules').onclick=()=>{document.getElementById('rulesModal').style.display='none';};
+document.getElementById('rulesModal').onclick=event=>{if(event.target.id==='rulesModal')event.currentTarget.style.display='none';};
+window.addEventListener('beforeunload',()=>{stopNetwork();cancelCassie();});
+
+setHumanMenu();render();
+</script>
+</body>
+</html>
