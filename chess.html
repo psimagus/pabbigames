@@ -21,7 +21,8 @@ button.big{font-weight:800}
 button.infoBtn{background:#334155}
 button:disabled{opacity:.55;cursor:wait}
 input{height:32px;padding:5px 7px;border-radius:8px;border:1px solid #444;background:#0f0f23;color:#fff;width:84px;text-align:center;text-transform:uppercase;font-size:.78rem;font-weight:700}
-#board{display:grid;grid-template-columns:repeat(8,1fr);background:#3a3a5c;border:4px solid #3a3a5c;border-radius:6px;width:96vw;max-width:520px;aspect-ratio:1/1;overflow:hidden;touch-action:manipulation}
+#boardWrap{position:relative;width:96vw;max-width:520px;aspect-ratio:1/1}
+#board{display:grid;grid-template-columns:repeat(8,1fr);background:#3a3a5c;border:4px solid #3a3a5c;border-radius:6px;width:100%;height:100%;overflow:hidden;touch-action:manipulation}
 .square{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1;cursor:pointer;user-select:none;-webkit-user-select:none}
 .square.light{background:#e8dcc0}
 .square.dark{background:#8d6a43}
@@ -37,6 +38,10 @@ input{height:32px;padding:5px 7px;border-radius:8px;border:1px solid #444;backgr
 .coord.file{right:3px;bottom:1px}
 .coord.rank{left:3px;top:1px}
 .square.light .coord{color:#704b2d}.square.dark .coord{color:#f0dfbd}
+#endBanner{position:absolute;z-index:20;left:6%;right:6%;top:50%;transform:translateY(-50%);display:none;padding:16px 10px;border:2px solid #facc15;border-radius:12px;background:rgba(15,23,42,.72);box-shadow:0 6px 28px #0009;text-align:center;pointer-events:none;backdrop-filter:blur(1px)}
+#endBanner.show{display:block}
+#endTitle{font-size:clamp(1.75rem,9vw,3.1rem);font-weight:900;letter-spacing:2px;color:#facc15;text-shadow:0 2px 3px #000}
+#endReason{margin-top:4px;font-size:clamp(.8rem,3.5vw,1rem);font-weight:700;color:#fff}
 #info{font-size:.8rem;margin:5px 5px 2px;text-align:center;line-height:1.35}
 #rulesModal,#promotionModal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:110;padding:12px}
 #rulesBox{background:#f8f1e0;color:#1a1a1a;border-radius:14px;max-width:520px;width:96vw;max-height:90vh;overflow:auto;padding:18px 16px;line-height:1.45}
@@ -62,7 +67,7 @@ input{height:32px;padding:5px 7px;border-radius:8px;border:1px solid #444;backgr
 
 <div class="controls"><button id="createBtn" class="big">Create Game</button><input id="codeInput" placeholder="GAME CODE" maxlength="4" aria-label="Four-character game code"><button id="joinBtn" class="big">Join Game</button><button id="copyBtn" hidden>Copy</button><button id="resetBtn">Reset</button><button id="howBtn" class="infoBtn">? How to Play</button></div>
 
-<div id="board" aria-label="Chess board"></div>
+<div id="boardWrap"><div id="board" aria-label="Chess board"></div><div id="endBanner" role="status" aria-live="polite"><div id="endTitle"></div><div id="endReason"></div></div></div>
 <div id="info">You: <b><span id="myRole">-</span></b> | Turn: <b><span id="turnInfo">White</span></b> | <span id="modeInfo">Human</span><br><span id="conn" style="color:#22c55e">Offline</span><br><span id="thinkInfo" style="color:#facc15"></span></div>
 
 <div id="promotionModal"><div id="promotionBox"><h3>Promote your pawn</h3><div id="promotionChoices"><button data-piece="q" aria-label="Queen">♕</button><button data-piece="r" aria-label="Rook">♖</button><button data-piece="b" aria-label="Bishop">♗</button><button data-piece="n" aria-label="Knight">♘</button></div></div></div>
@@ -426,6 +431,12 @@ cell.onclick=()=>onSquare(square);boardEl.appendChild(cell);
 }
 let turnText=game.result?'Game over':colorName(game.turn)+(inCheck(game,game.turn)?' - Check':'');
 document.getElementById('turnInfo').textContent=turnText;
+let banner=document.getElementById('endBanner');
+if(game.result){
+document.getElementById('endTitle').textContent=game.result.reason==='checkmate'?'CHECKMATE':'DRAW';
+document.getElementById('endReason').textContent=game.result.reason==='checkmate'?colorName(game.result.winner)+' wins':game.result.text;
+banner.classList.add('show');
+}else banner.classList.remove('show');
 }
 
 function humanMayMove(){
